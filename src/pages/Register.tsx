@@ -4,10 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { translateSupabaseError } from '../utils/errorTranslations'
 import {
   Container,
-  Stack,
-  Flex,
   Box,
-  Image,
   Heading,
   Text,
   Alert,
@@ -23,7 +20,6 @@ import {
   Radio,
   Checkbox,
   VStack,
-  HStack,
   FormHelperText
 } from '@chakra-ui/react'
 
@@ -101,7 +97,7 @@ export default function Register() {
         learning_goal: learningGoal
       }
       
-      const { data, error } = await signUp(email, password, userData)
+      const { error } = await signUp(email, password, userData)
       
       if (error) {
         setError('Error al crear cuenta: ' + translateSupabaseError(error.message))

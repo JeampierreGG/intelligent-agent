@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { saveQuestionnaireResponsesSimple } from '../services/questionnaire-simple'
 import {
   Container,
-  Stack,
   Flex,
   Box,
   Image,
@@ -21,7 +20,6 @@ import {
   VStack,
   HStack,
   SimpleGrid,
-  Progress,
   Icon,
   FormHelperText
 } from '@chakra-ui/react'
@@ -136,9 +134,7 @@ export default function InitialQuestionnaire() {
     }
   }
 
-  const handleBack = () => {
-    navigate(-1)
-  }
+
 
   return (
     <Container maxW="4xl" py={8}>
