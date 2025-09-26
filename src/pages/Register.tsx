@@ -1,7 +1,8 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import React, { useState } from 'react'
+import { Link as RouterLink } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { translateSupabaseError } from '../utils/errorTranslations'
+import { useNavigateWithQuestionnaire } from '../hooks/useNavigateWithQuestionnaire'
 import {
   Container,
   Box,
@@ -20,7 +21,8 @@ import {
   Radio,
   Checkbox,
   VStack,
-  FormHelperText
+  FormHelperText,
+  Link
 } from '@chakra-ui/react'
 
 export default function Register() {
@@ -38,7 +40,7 @@ export default function Register() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const { signUp } = useAuth()
-  const navigate = useNavigate()
+  const { navigateBasedOnQuestionnaire } = useNavigateWithQuestionnaire()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -104,11 +106,12 @@ export default function Register() {
         return
       }
       
-      // Si el registro fue exitoso, navegar al dashboard
-      // El ProtectedRoute se encargará de redirigir al cuestionario si es necesario
-      navigate('/dashboard')
-    } catch (error: any) {
-      setError('Error al crear cuenta: ' + translateSupabaseError(error.message))
+      // Si el registro fue exitoso, navegar basado en el estado del cuestionario
+      // Para usuarios nuevos, esto debería ir al cuestionario inicial
+      await navigateBasedOnQuestionnaire()
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
+      setError('Error al crear cuenta: ' + translateSupabaseError(errorMessage))
     } finally {
       setLoading(false)
     }
@@ -339,11 +342,11 @@ export default function Register() {
                >
                  <Text fontSize="sm">
                    Acepto los{' '}
-                   <Link to="/terms" style={{ color: '#319795', textDecoration: 'underline' }}>
+                   <Link as={RouterLink} to="/terms" color="teal.500" textDecoration="underline">
                      términos y condiciones
                    </Link>
                    {' '}y la{' '}
-                   <Link to="/privacy" style={{ color: '#319795', textDecoration: 'underline' }}>
+                   <Link as={RouterLink} to="/privacy" color="teal.500" textDecoration="underline">
                      política de privacidad
                    </Link>
                    {' '}*
@@ -373,7 +376,7 @@ export default function Register() {
 
           <Text textAlign="center" mt="4" color="gray.600">
             ¿Ya tienes cuenta?{' '}
-            <Link to="/login" style={{ color: '#319795', textDecoration: 'underline' }}>
+            <Link as={RouterLink} to="/login" color="teal.500" textDecoration="underline">
               Inicia sesión aquí
             </Link>
           </Text>

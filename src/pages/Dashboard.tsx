@@ -1,6 +1,5 @@
 import {
   Box,
-  Container,
   Flex,
   VStack,
   HStack,
@@ -9,42 +8,68 @@ import {
   Card,
   CardBody,
   Icon,
-  Badge,
   SimpleGrid,
   Avatar,
   Menu,
   MenuButton,
   MenuList,
   MenuItem,
-  Divider,
-  useColorModeValue
+  useColorModeValue,
+  useDisclosure,
+  Image
 } from '@chakra-ui/react'
 import { 
-  FiHome, 
   FiBook, 
   FiTrendingUp, 
   FiSettings, 
-  FiLogOut,
   FiPlus,
   FiBookOpen,
   FiAward,
   FiClock
 } from 'react-icons/fi'
-import { useState } from 'react'
+import { 
+  MdDashboard, 
+  MdLibraryBooks, 
+  MdLeaderboard, 
+  MdSettings as MdSettingsIcon
+} from 'react-icons/md'
+import { ChevronDownIcon } from '@chakra-ui/icons'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
+import NewResourceModal from '../components/modals/NewResourceModal'
+import logoImage from '../assets/Logo-IA.png'
+import { getUserPreferences, mapFormatPreferencesToResourceTypes, mapInteractiveActivitiesToGames, type UserPreferences } from '../services/userPreferences'
 
 export default function Dashboard() {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
   const [activeSection, setActiveSection] = useState('dashboard')
+  const { isOpen, onOpen, onClose } = useDisclosure()
+  const [userPreferences, setUserPreferences] = useState<UserPreferences | null>(null)
   
-  const bgColor = useColorModeValue('gray.50', 'gray.900')
-  const cardBg = useColorModeValue('white', 'gray.800')
-  const sidebarBg = useColorModeValue('white', 'gray.800')
+  const bgColor = useColorModeValue('#f7fafc', 'gray.900')
+  const headerBg = useColorModeValue('white', 'gray.800')
+  const sidebarBg = useColorModeValue('white', 'gray.900')
   const borderColor = useColorModeValue('gray.200', 'gray.700')
+  const cardBg = useColorModeValue('white', 'gray.800')
 
-  // Dashboard cargado correctamente
+  // Cargar preferencias del usuario
+  useEffect(() => {
+    const loadUserPreferences = async () => {
+      if (user?.id) {
+        try {
+          const preferences = await getUserPreferences(user.id)
+          setUserPreferences(preferences)
+          console.log('✅ Preferencias del usuario cargadas:', preferences)
+        } catch (error) {
+          console.error('❌ Error cargando preferencias del usuario:', error)
+        }
+      }
+    }
+
+    loadUserPreferences()
+  }, [user?.id])
 
   const handleSignOut = async () => {
     try {
@@ -56,10 +81,10 @@ export default function Dashboard() {
   }
 
   const sidebarItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: FiHome },
-    { id: 'recursos', label: 'Recursos', icon: FiBook },
-    { id: 'ranking', label: 'Ranking', icon: FiTrendingUp },
-    { id: 'preferencias', label: 'Preferencias', icon: FiSettings }
+    { id: 'dashboard', label: 'Dashboard', icon: MdDashboard },
+    { id: 'recursos', label: 'Recursos', icon: MdLibraryBooks },
+    { id: 'ranking', label: 'Ranking', icon: MdLeaderboard },
+    { id: 'preferencias', label: 'Preferencias', icon: MdSettingsIcon }
   ]
 
   const renderContent = () => {
@@ -67,15 +92,55 @@ export default function Dashboard() {
       case 'dashboard':
         return (
           <VStack spacing={6} align="stretch">
-            <Box>
-              <Text fontSize="2xl" fontWeight="bold" mb={2}>
-                ¡Bienvenido a Learn Playing! 🎮
-              </Text>
-              <Text color="gray.600">
-                Comienza tu aventura de aprendizaje personalizado
-              </Text>
+            {/* Sección de Bienvenida */}
+            <Box
+              bg="linear-gradient(135deg, #000000 0%, #2d2d2d 100%)"
+              color="white"
+              p={8}
+              borderRadius="xl"
+              position="relative"
+              overflow="hidden"
+            >
+              <VStack spacing={4} align="start">
+                <Text fontSize="3xl" fontWeight="bold">
+                  ¡Bienvenida de vuelta, {(() => {
+                    const name = user?.user_metadata?.full_name || user?.email?.split('@')[0] || '';
+                    return name.split(' ').map((word: string) => 
+                      word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+                    ).join(' ');
+                  })()}!
+                </Text>
+                <Text fontSize="lg" opacity={0.9}>
+                  Continúa tu aprendizaje con la metodología MINERVA
+                </Text>
+                <HStack spacing={4} mt={6}>
+                  <Button
+                  leftIcon={<Icon as={FiPlus} />}
+                  bg="white"
+                  color="black"
+                  variant="solid"
+                  onClick={onOpen}
+                  _hover={{ transform: 'translateY(-2px)', shadow: 'lg', bg: 'gray.100' }}
+                  transition="all 0.2s"
+                >
+                  Nuevo Recurso
+                </Button>
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    color="white"
+                    borderColor="white"
+                    leftIcon={<Icon as={FiBookOpen} />}
+                    isDisabled
+                    _hover={{ bg: 'whiteAlpha.200' }}
+                  >
+                    Ver Progreso
+                  </Button>
+                </HStack>
+              </VStack>
             </Box>
 
+            {/* Estadísticas */}
             <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
               <Card bg={cardBg} shadow="sm" borderWidth="1px" borderColor={borderColor}>
                 <CardBody>
@@ -122,28 +187,6 @@ export default function Dashboard() {
                 </CardBody>
               </Card>
             </SimpleGrid>
-
-            <Card bg={cardBg} shadow="sm" borderWidth="1px" borderColor={borderColor}>
-              <CardBody>
-                <VStack spacing={4} align="center" py={8}>
-                  <Icon as={FiPlus} boxSize={12} color="blue.500" />
-                  <Text fontSize="lg" fontWeight="semibold">
-                    ¡Crea tu primer recurso educativo!
-                  </Text>
-                  <Text color="gray.600" textAlign="center">
-                    Genera materiales personalizados con IA y aprende jugando
-                  </Text>
-                  <Button 
-                    colorScheme="blue" 
-                    size="lg"
-                    leftIcon={<Icon as={FiPlus} />}
-                    onClick={() => setActiveSection('recursos')}
-                  >
-                    Crear Recurso
-                  </Button>
-                </VStack>
-              </CardBody>
-            </Card>
           </VStack>
         )
       
@@ -155,7 +198,7 @@ export default function Dashboard() {
                 <Text fontSize="2xl" fontWeight="bold">Mis Recursos</Text>
                 <Text color="gray.600">Gestiona tus materiales de estudio</Text>
               </Box>
-              <Button colorScheme="blue" leftIcon={<Icon as={FiPlus} />}>
+              <Button colorScheme="blue" leftIcon={<Icon as={FiPlus} />} onClick={onOpen}>
                 Nuevo Recurso
               </Button>
             </HStack>
@@ -230,90 +273,144 @@ export default function Dashboard() {
   }
 
   return (
-    <Flex minH="100vh" bg={bgColor}>
-      {/* Sidebar */}
+    <Box minH="100vh" bg={bgColor} w="100%" maxW="100vw">
+      {/* Header */}
       <Box
-        w="250px"
-        bg={sidebarBg}
-        borderRight="1px"
+        bg={headerBg}
+        borderBottom="1px"
         borderColor={borderColor}
-        p={4}
+        px={6}
+        py={2}
+        position="sticky"
+        top={0}
+        zIndex={1000}
+        w="100%"
       >
-        <VStack spacing={6} align="stretch">
+        <Flex justify="space-between" align="center">
           {/* Logo */}
-          <Box textAlign="center" py={4}>
-            <Text fontSize="xl" fontWeight="bold" color="blue.500">
+          <Flex align="center" gap={3}>
+            <Image
+              src={logoImage}
+              alt="Learn Playing"
+              height="32px"
+              width="auto"
+            />
+            <Text fontSize="xl" fontWeight="bold" color="gray.800">
               Learn Playing
             </Text>
-          </Box>
-
-          {/* Navigation */}
-          <VStack spacing={2} align="stretch">
-            {sidebarItems.map((item) => (
-              <Button
-                key={item.id}
-                variant={activeSection === item.id ? 'solid' : 'ghost'}
-                colorScheme={activeSection === item.id ? 'blue' : 'gray'}
-                justifyContent="flex-start"
-                leftIcon={<Icon as={item.icon} />}
-                onClick={() => setActiveSection(item.id)}
-              >
-                {item.label}
-              </Button>
-            ))}
-            
-            {/* Botón de Cerrar Sesión */}
-            <Box pt={4}>
-              <Divider mb={4} />
-              <Button
-                variant="ghost"
-                colorScheme="red"
-                justifyContent="flex-start"
-                leftIcon={<Icon as={FiLogOut} />}
-                onClick={handleSignOut}
-                w="full"
-              >
-                Cerrar Sesión
-              </Button>
-            </Box>
-          </VStack>
+          </Flex>
 
           {/* User Menu */}
-          <Box mt="auto" pt={4}>
-            <Divider mb={4} />
-            <Menu>
-              <MenuButton as={Button} variant="ghost" w="full" justifyContent="flex-start">
-                <HStack>
-                  <Avatar size="sm" name={user?.email} />
-                  <VStack spacing={0} align="start" flex={1}>
-                    <Text fontSize="sm" fontWeight="medium" isTruncated>
-                      {user?.email}
-                    </Text>
-                    <Badge colorScheme="green" size="sm">
-                      Activo
-                    </Badge>
-                  </VStack>
-                </HStack>
-              </MenuButton>
-              <MenuList>
-                <MenuItem icon={<Icon as={FiSettings} />}>
-                  Configuración
-                </MenuItem>
-                <MenuItem icon={<Icon as={FiLogOut} />} onClick={handleSignOut}>
-                  Cerrar Sesión
-                </MenuItem>
-              </MenuList>
-            </Menu>
-          </Box>
-        </VStack>
+          <Menu>
+            <MenuButton
+              as={Box}
+              cursor="pointer"
+              _hover={{ bg: 'gray.50' }}
+              px={3}
+              py={2}
+              borderRadius="md"
+              transition="all 0.2s"
+              minW="fit-content"
+              w="auto"
+              height="40px"
+            >
+              <Flex direction="row" align="center" gap={2} height="100%">
+                <Avatar
+                  size="sm"
+                  name={`${user?.user_metadata?.first_name || ''} ${user?.user_metadata?.last_name || ''}`.trim() || user?.email}
+                  bg="blue.500"
+                  flexShrink={0}
+                />
+                <Text 
+                  fontSize="sm" 
+                  fontWeight="medium"
+                  whiteSpace="nowrap"
+                  flexShrink={0}
+                >
+                  {(() => {
+                    const firstName = user?.user_metadata?.first_name || user?.email?.split('@')[0] || '';
+                    return firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
+                  })()}
+                </Text>
+                <Text 
+                  fontSize="sm" 
+                  fontWeight="medium"
+                  whiteSpace="nowrap"
+                  flexShrink={0}
+                >
+                  {(() => {
+                    const lastName = user?.user_metadata?.last_name || '';
+                    return lastName ? lastName.charAt(0).toUpperCase() + lastName.slice(1).toLowerCase() : '';
+                  })()}
+                </Text>
+                <ChevronDownIcon flexShrink={0} />
+              </Flex>
+            </MenuButton>
+            <MenuList>
+              <MenuItem onClick={handleSignOut}>
+                Cerrar Sesión
+              </MenuItem>
+            </MenuList>
+          </Menu>
+        </Flex>
       </Box>
 
-      {/* Main Content */}
-      <Box flex={1} p={6}>
-        <Container maxW="container.xl">
+      <Flex>
+        {/* Sidebar */}
+        <Box
+          bg={sidebarBg}
+          borderRight="1px"
+          borderColor={borderColor}
+          w="250px"
+          h="calc(100vh - 60px)"
+          position="sticky"
+          top="60px"
+          p={4}
+        >
+          <VStack spacing={2} align="stretch">
+            {sidebarItems.map((item) => (
+              <Flex
+                key={item.id}
+                align="center"
+                gap={3}
+                px={4}
+                py={3}
+                borderRadius="lg"
+                cursor="pointer"
+                bg={activeSection === item.id ? 'black' : 'transparent'}
+                color={activeSection === item.id ? 'white' : 'gray.600'}
+                _hover={{ bg: activeSection === item.id ? 'black' : 'gray.100' }}
+                transition="all 0.2s"
+                onClick={() => setActiveSection(item.id)}
+                w="full"
+              >
+                <Icon as={item.icon} boxSize={5} />
+                <Text fontSize="sm" fontWeight={activeSection === item.id ? 'semibold' : 'medium'}>
+                  {item.label}
+                </Text>
+              </Flex>
+            ))}
+          </VStack>
+        </Box>
+
+        {/* Main Content */}
+        <Box flex={1} p={6} w="100%">
           {renderContent()}
-        </Container>
-      </Box>
-    </Flex>
+        </Box>
+      </Flex>
+
+      {/* Modal de Nuevo Recurso */}
+      <NewResourceModal 
+        isOpen={isOpen} 
+        onClose={onClose}
+        userPreferences={{
+          academicLevel: userPreferences?.academicLevel || 'Universidad',
+          formatPreferences: userPreferences?.formatPreferences || [],
+          interactiveActivities: userPreferences?.interactiveActivities || [],
+          preferredFormats: userPreferences ? mapFormatPreferencesToResourceTypes(userPreferences.formatPreferences) : [],
+          preferredGames: userPreferences ? mapInteractiveActivitiesToGames(userPreferences.interactiveActivities) : []
+        }}
+      />
+    </Box>
   )
 }

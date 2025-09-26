@@ -40,9 +40,9 @@ export default function InitialQuestionnaire() {
   // Componente cargado correctamente
 
   const handleFormatPreferenceChange = (value: string, checked: boolean) => {
-    if (checked && formatPreferences.length < 3) {
+    if (checked) {
       setFormatPreferences([...formatPreferences, value])
-    } else if (!checked) {
+    } else {
       setFormatPreferences(formatPreferences.filter(item => item !== value))
     }
   }
@@ -57,9 +57,9 @@ export default function InitialQuestionnaire() {
   }
 
   const handleInteractiveActivityChange = (value: string, checked: boolean) => {
-    if (checked && interactiveActivities.length < 4) {
+    if (checked) {
       setInteractiveActivities([...interactiveActivities, value])
-    } else if (!checked) {
+    } else {
       setInteractiveActivities(interactiveActivities.filter(item => item !== value))
     }
   }
@@ -118,7 +118,7 @@ export default function InitialQuestionnaire() {
       // También intentar verificar el estado (pero no depender de ello)
       try {
         await checkQuestionnaireStatus()
-      } catch (statusError) {
+      } catch {
         console.log('⚠️ Error verificando estado, pero continuando porque sabemos que se guardó')
       }
       
@@ -205,56 +205,53 @@ export default function InitialQuestionnaire() {
                   <Heading size="md" color="gray.800">Preferencias de Formato</Heading>
                 </HStack>
                 
-                <FormControl isRequired>
+                <FormControl>
                   <FormLabel fontWeight="semibold" color="gray.700">
-                    ¿Qué tipo de recurso prefieres para aprender? (Selecciona hasta 3)
+                    ¿Qué tipo de recurso prefieres para aprender? (Selecciona todas las que te gusten - mínimo 1) *
                   </FormLabel>
                   <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
                     <Checkbox 
                       isChecked={formatPreferences.includes('resumenes')}
                       onChange={(e) => handleFormatPreferenceChange('resumenes', e.target.checked)}
-                      isDisabled={!formatPreferences.includes('resumenes') && formatPreferences.length >= 3}
                     >
                       Resúmenes cortos y esquemáticos
                     </Checkbox>
                     <Checkbox 
                       isChecked={formatPreferences.includes('explicaciones')}
                       onChange={(e) => handleFormatPreferenceChange('explicaciones', e.target.checked)}
-                      isDisabled={!formatPreferences.includes('explicaciones') && formatPreferences.length >= 3}
                     >
                       Explicaciones paso a paso con ejemplos
                     </Checkbox>
                     <Checkbox 
                       isChecked={formatPreferences.includes('ejercicios')}
                       onChange={(e) => handleFormatPreferenceChange('ejercicios', e.target.checked)}
-                      isDisabled={!formatPreferences.includes('ejercicios') && formatPreferences.length >= 3}
                     >
                       Ejercicios y cuestionarios
                     </Checkbox>
                     <Checkbox 
                        isChecked={formatPreferences.includes('casos')}
                        onChange={(e) => handleFormatPreferenceChange('casos', e.target.checked)}
-                       isDisabled={!formatPreferences.includes('casos') && formatPreferences.length >= 3}
                      >
                        Casos prácticos
                      </Checkbox>
                      <Checkbox 
                        isChecked={formatPreferences.includes('recursos_visuales')}
                        onChange={(e) => handleFormatPreferenceChange('recursos_visuales', e.target.checked)}
-                       isDisabled={!formatPreferences.includes('recursos_visuales') && formatPreferences.length >= 3}
                      >
                        Recursos visuales
                      </Checkbox>
                      <Checkbox 
                        isChecked={formatPreferences.includes('interactivo')}
                        onChange={(e) => handleFormatPreferenceChange('interactivo', e.target.checked)}
-                       isDisabled={!formatPreferences.includes('interactivo') && formatPreferences.length >= 3}
                      >
                        Contenido Interactivo
                      </Checkbox>
                   </SimpleGrid>
-                  <FormHelperText>
-                    Seleccionados: {formatPreferences.length}/3
+                  <FormHelperText color={formatPreferences.length === 0 ? "red.500" : "green.600"}>
+                    {formatPreferences.length === 0 
+                      ? "⚠️ Selecciona al menos 1 opción" 
+                      : `✅ ${formatPreferences.length} opción${formatPreferences.length > 1 ? 'es' : ''} seleccionada${formatPreferences.length > 1 ? 's' : ''}`
+                    }
                   </FormHelperText>
                 </FormControl>
               </VStack>
@@ -268,56 +265,53 @@ export default function InitialQuestionnaire() {
                   <Heading size="md" color="gray.800">Preferencias de Juegos Interactivos</Heading>
                 </HStack>
                 
-                <FormControl isRequired>
+                <FormControl>
                   <FormLabel fontWeight="semibold" color="gray.700">
-                    ¿Qué tipo de actividades interactivas prefieres después de estudiar? (Selecciona hasta 4)
+                    ¿Qué tipo de actividades interactivas prefieres después de estudiar? (Selecciona todas las que te gusten - mínimo 1) *
                   </FormLabel>
                   <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3}>
                     <Checkbox 
                       isChecked={interactiveActivities.includes('cuestionarios')}
                       onChange={(e) => handleInteractiveActivityChange('cuestionarios', e.target.checked)}
-                      isDisabled={!interactiveActivities.includes('cuestionarios') && interactiveActivities.length >= 4}
                     >
                       Cuestionarios interactivos
                     </Checkbox>
                     <Checkbox 
                       isChecked={interactiveActivities.includes('arrastrar')}
                       onChange={(e) => handleInteractiveActivityChange('arrastrar', e.target.checked)}
-                      isDisabled={!interactiveActivities.includes('arrastrar') && interactiveActivities.length >= 4}
                     >
                       Arrastrar y soltar
                     </Checkbox>
                     <Checkbox 
                       isChecked={interactiveActivities.includes('memoria')}
                       onChange={(e) => handleInteractiveActivityChange('memoria', e.target.checked)}
-                      isDisabled={!interactiveActivities.includes('memoria') && interactiveActivities.length >= 4}
                     >
                       Juegos de memoria
                     </Checkbox>
                     <Checkbox 
                       isChecked={interactiveActivities.includes('simulaciones')}
                       onChange={(e) => handleInteractiveActivityChange('simulaciones', e.target.checked)}
-                      isDisabled={!interactiveActivities.includes('simulaciones') && interactiveActivities.length >= 4}
                     >
                       Simulaciones
                     </Checkbox>
                     <Checkbox 
                       isChecked={interactiveActivities.includes('presentaciones')}
                       onChange={(e) => handleInteractiveActivityChange('presentaciones', e.target.checked)}
-                      isDisabled={!interactiveActivities.includes('presentaciones') && interactiveActivities.length >= 4}
                     >
                       Presentaciones interactivas
                     </Checkbox>
                     <Checkbox 
                       isChecked={interactiveActivities.includes('timeline')}
                       onChange={(e) => handleInteractiveActivityChange('timeline', e.target.checked)}
-                      isDisabled={!interactiveActivities.includes('timeline') && interactiveActivities.length >= 4}
                     >
                       Líneas de tiempo interactivas
                     </Checkbox>
                   </SimpleGrid>
-                  <FormHelperText>
-                    Seleccionados: {interactiveActivities.length}/4
+                  <FormHelperText color={interactiveActivities.length === 0 ? "red.500" : "green.600"}>
+                    {interactiveActivities.length === 0 
+                      ? "⚠️ Selecciona al menos 1 actividad" 
+                      : `✅ ${interactiveActivities.length} actividad${interactiveActivities.length > 1 ? 'es' : ''} seleccionada${interactiveActivities.length > 1 ? 's' : ''}`
+                    }
                   </FormHelperText>
                 </FormControl>
               </VStack>

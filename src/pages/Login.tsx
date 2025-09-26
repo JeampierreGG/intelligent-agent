@@ -1,7 +1,8 @@
-import { useState } from 'react'
-import { Link as RouterLink, useNavigate } from 'react-router-dom'
+import React, { useState } from 'react'
+import { Link as RouterLink } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { translateSupabaseError } from '../utils/errorTranslations'
+import { useNavigateWithQuestionnaire } from '../hooks/useNavigateWithQuestionnaire'
 import {
   Box,
   Button,
@@ -28,7 +29,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const { signIn } = useAuth()
-  const navigate = useNavigate()
+  const { navigateBasedOnQuestionnaire } = useNavigateWithQuestionnaire()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -48,11 +49,11 @@ export default function Login() {
         return
       }
       
-      // Si el login fue exitoso, redirigir al dashboard
-      // El ProtectedRoute se encargará de verificar si necesita completar el cuestionario
-      navigate('/dashboard')
-    } catch (error: any) {
-      setError('Error al iniciar sesión: ' + translateSupabaseError(error.message))
+      // Si el login fue exitoso, navegar basado en el estado del cuestionario
+      await navigateBasedOnQuestionnaire()
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
+      setError('Error al iniciar sesión: ' + translateSupabaseError(errorMessage))
     } finally {
       setLoading(false)
     }

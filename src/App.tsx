@@ -6,6 +6,7 @@ import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
 import InitialQuestionnaire from './pages/InitialQuestionnaire'
 import ProtectedRoute from './components/ProtectedRoute'
+import { DashboardProtectedRoute } from './components/DashboardProtectedRoute'
 
 // Componente para rutas públicas (solo accesibles si no está logueado)
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -15,6 +16,8 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return <div>Cargando...</div>
   }
   
+  // Si el usuario está logueado, redirigir al dashboard
+  // El DashboardProtectedRoute se encargará de verificar el cuestionario
   return !user ? <>{children}</> : <Navigate to="/dashboard" />
 }
 
@@ -42,7 +45,7 @@ function App() {
               } 
             />
             <Route 
-              path="/questionnaire" 
+              path="/initial-questionnaire" 
               element={
                 <ProtectedRoute requiresQuestionnaire={false}>
                   <InitialQuestionnaire />
@@ -52,9 +55,9 @@ function App() {
             <Route 
               path="/dashboard" 
               element={
-                <ProtectedRoute requiresQuestionnaire={true}>
+                <DashboardProtectedRoute>
                   <Dashboard />
-                </ProtectedRoute>
+                </DashboardProtectedRoute>
               } 
             />
           </Routes>
