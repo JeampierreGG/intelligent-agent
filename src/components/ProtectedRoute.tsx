@@ -55,8 +55,8 @@ export default function ProtectedRoute({
     )
   }
 
-  // Si requiere cuestionario y no lo ha completado, redirigir al cuestionario
-  if (requiresQuestionnaire && hasCompletedQuestionnaire === false) {
+  // Si requiere cuestionario y no lo ha completado (o aún no se ha verificado), redirigir
+  if (requiresQuestionnaire && hasCompletedQuestionnaire !== true) {
     return <Navigate to="/questionnaire" replace />
   }
 
