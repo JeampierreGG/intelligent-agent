@@ -284,7 +284,21 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
               >
                 <SimpleGrid columns={2} spacing={3} mt={3}>
                   {gameOptions.map((game) => (
-                    <Checkbox key={game.value} value={game.value}>
+                    <Checkbox 
+                      key={game.value} 
+                      value={game.value}
+                      colorScheme="blackAlpha"
+                      sx={{
+                        '& .chakra-checkbox__control[data-checked]': {
+                          backgroundColor: 'black',
+                          borderColor: 'black',
+                          color: 'white'
+                        },
+                        '& .chakra-checkbox__control:hover': {
+                          borderColor: 'black'
+                        }
+                      }}
+                    >
                       {game.label}
                     </Checkbox>
                   ))}
@@ -300,7 +314,10 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
               Cancelar
             </Button>
             <Button 
-              colorScheme="blue" 
+              bg="black"
+              color="white"
+              _hover={{ bg: "gray.800" }}
+              _active={{ bg: "gray.900" }}
               onClick={handleSubmit}
               isLoading={isGenerating}
               loadingText="Generando con IA..."
