@@ -1,6 +1,15 @@
-# React + TypeScript + Vite
+# Learn Playing - Agente Inteligente para Personalización de Recursos Educativos
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Plataforma educativa que utiliza inteligencia artificial para generar recursos de aprendizaje personalizados y gamificados.
+
+## Tecnologías
+
+- **Frontend:** React + TypeScript + Vite + Chakra UI
+- **Backend:** Supabase
+- **IA:** Google Gemini API
+- **Gamificación:** H5P
+
+## Configuración
 
 Currently, two official plugins are available:
 
