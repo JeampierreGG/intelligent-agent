@@ -17,6 +17,8 @@ const TEMP_SESSION_KEY = 'temp_session'
  * Crea un usuario temporal y lo guarda en localStorage
  */
 export const createTempUser = (email: string, password: string, name: string = 'Usuario Temporal'): TempUser => {
+  // Evitar advertencia de parámetro no usado en compilación estricta
+  void password
   const tempUser: TempUser = {
     id: `temp_user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     email,

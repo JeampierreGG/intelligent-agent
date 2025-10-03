@@ -22,7 +22,6 @@ export interface CreateLocalResourceData {
 }
 
 const RESOURCES_KEY = 'educational_resources'
-const USER_KEY = 'current_user'
 
 /**
  * Genera un ID único para los recursos
