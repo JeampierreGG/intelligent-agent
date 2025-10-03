@@ -1,8 +1,8 @@
 import React, { useState } from 'react'
-import { Link as RouterLink } from 'react-router-dom'
+import { Link as RouterLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { translateSupabaseError } from '../utils/errorTranslations'
-import { useNavigateWithQuestionnaire } from '../hooks/useNavigateWithQuestionnaire'
+import { type UserProfileData } from '../services/userProfileService'
 import {
   Container,
   Box,
@@ -40,7 +40,7 @@ export default function Register() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const { signUp } = useAuth()
-  const { navigateBasedOnQuestionnaire } = useNavigateWithQuestionnaire()
+  const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -90,7 +90,7 @@ export default function Register() {
       setError('')
       setLoading(true)
       
-      const userData = {
+      const userData: UserProfileData = {
         first_name: firstName,
         last_name: lastName,
         birth_day: birthDay,
@@ -106,9 +106,8 @@ export default function Register() {
         return
       }
       
-      // Si el registro fue exitoso, navegar basado en el estado del cuestionario
-      // Para usuarios nuevos, esto debería ir al cuestionario inicial
-      await navigateBasedOnQuestionnaire()
+      // Si el registro fue exitoso, navegar directamente al dashboard
+      navigate('/dashboard')
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
       setError('Error al crear cuenta: ' + translateSupabaseError(errorMessage))
@@ -268,6 +267,7 @@ export default function Register() {
                 <FormLabel color="gray.700" fontWeight="semibold" _after={{ color: "black" }}>Fecha de Nacimiento</FormLabel>
                 <Grid templateColumns="repeat(3, 1fr)" gap="4">
                   <Select
+                    id="birth-day-select"
                     placeholder="Día"
                     value={birthDay}
                     onChange={(e) => setBirthDay(e.target.value)}
@@ -282,6 +282,7 @@ export default function Register() {
                     ))}
                   </Select>
                   <Select
+                    id="birth-month-select"
                     placeholder="Mes"
                     value={birthMonth}
                     onChange={(e) => setBirthMonth(e.target.value)}
@@ -296,6 +297,7 @@ export default function Register() {
                     ))}
                   </Select>
                   <Select
+                    id="birth-year-select"
                     placeholder="Año"
                     value={birthYear}
                     onChange={(e) => setBirthYear(e.target.value)}

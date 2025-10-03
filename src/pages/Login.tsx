@@ -1,8 +1,7 @@
 import React, { useState } from 'react'
-import { Link as RouterLink } from 'react-router-dom'
+import { Link as RouterLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { translateSupabaseError } from '../utils/errorTranslations'
-import { useNavigateWithQuestionnaire } from '../hooks/useNavigateWithQuestionnaire'
 import {
   Box,
   Button,
@@ -29,7 +28,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const { signIn } = useAuth()
-  const { navigateBasedOnQuestionnaire } = useNavigateWithQuestionnaire()
+  const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -38,22 +37,20 @@ export default function Login() {
       setError('')
       setLoading(true)
       
-      const { error } = await signIn(email, password)
+      // El AuthContext ahora lanza excepciones en caso de error
+      await signIn(email, password)
       
-      if (error) {
-        if (error.message === 'Email not confirmed') {
-          setError('Tu email no ha sido confirmado. Por favor, revisa tu bandeja de entrada y confirma tu email antes de iniciar sesión.')
-        } else {
-          setError('Error al iniciar sesión: ' + translateSupabaseError(error.message))
-        }
-        return
-      }
-      
-      // Si el login fue exitoso, navegar basado en el estado del cuestionario
-      await navigateBasedOnQuestionnaire()
+      // Si el login fue exitoso, navegar directamente al dashboard
+      navigate('/dashboard')
     } catch (error) {
+      console.error('Error en login:', error)
       const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
-      setError('Error al iniciar sesión: ' + translateSupabaseError(errorMessage))
+      
+      if (errorMessage === 'Email not confirmed') {
+        setError('Tu email no ha sido confirmado. Por favor, revisa tu bandeja de entrada y confirma tu email antes de iniciar sesión.')
+      } else {
+        setError('Error al iniciar sesión: ' + translateSupabaseError(errorMessage))
+      }
     } finally {
       setLoading(false)
     }

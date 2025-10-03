@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   Modal,
   ModalOverlay,
@@ -11,80 +11,65 @@ import {
   FormControl,
   FormLabel,
   Input,
-  Select,
   VStack,
   HStack,
-  Checkbox,
-  CheckboxGroup,
   Text,
   useToast,
-  SimpleGrid,
   Spinner
 } from '@chakra-ui/react'
-import { generateEducationalResource, type UserPreferences, type ResourceFormData } from '../../services/gemini'
+import { generateMatchUpResource } from '../../services/openrouter'
+import type { ResourceFormData } from '../../services/types'
 import { saveEducationalResource, type CreateResourceData } from '../../services/resources'
 import { useAuth } from '../../contexts/AuthContext'
+import { userProfileService } from '../../services/userProfileService'
 
 interface NewResourceModalProps {
   isOpen: boolean
   onClose: () => void
-  userPreferences?: {
-    academicLevel?: string
-    formatPreferences?: string[]
-    interactiveActivities?: string[]
-    preferredFormats?: string[] // Para compatibilidad con el mapeo
-    preferredGames?: string[] // Para compatibilidad con el mapeo
-  }
 }
 
 const NewResourceModal: React.FC<NewResourceModalProps> = ({
   isOpen,
-  onClose,
-  userPreferences
+  onClose
 }) => {
   const toast = useToast()
   const { user } = useAuth()
   const [isGenerating, setIsGenerating] = useState(false)
   const [formData, setFormData] = useState({
     subject: '',
-    topic: '',
-    difficulty: 'Básico',
-    resourceType: userPreferences?.preferredFormats?.[0] || 'Aprender Jugando',
-    selectedGames: userPreferences?.preferredGames || []
+    topic: ''
   })
+  const [profileLoading, setProfileLoading] = useState(false)
+  const [profileBirth, setProfileBirth] = useState<{ birth_day?: string; birth_month?: string; birth_year?: string }>({})
+  const [profileLearningGoal, setProfileLearningGoal] = useState<string | undefined>(undefined)
 
-  // Actualizar formulario cuando cambien las preferencias del usuario
+  // Cargar perfil del usuario desde Supabase para obtener fecha_nacimiento y objetivo_aprendizaje
   useEffect(() => {
-    if (userPreferences) {
-      setFormData(prev => ({
-        ...prev,
-        resourceType: userPreferences.preferredFormats?.[0] || 'Aprender Jugando',
-        selectedGames: userPreferences.preferredGames || []
-      }))
+    const loadProfile = async () => {
+      if (!user?.id) return
+      setProfileLoading(true)
+      try {
+        const profile = await userProfileService.getUserProfile(user.id)
+        if (profile) {
+          // fecha_nacimiento esperada en formato YYYY-MM-DD
+          const parts = (profile.fecha_nacimiento || '').split('-')
+          if (parts.length === 3) {
+            const [year, month, day] = parts
+            setProfileBirth({ birth_day: day, birth_month: month, birth_year: year })
+          }
+          setProfileLearningGoal(profile.objetivo_aprendizaje)
+        }
+      } catch (e) {
+        console.error('❌ Error cargando perfil del usuario:', e)
+      } finally {
+        setProfileLoading(false)
+      }
     }
-  }, [userPreferences])
 
-  const difficultyOptions = [
-    { value: 'Básico', label: 'Básico' },
-    { value: 'Intermedio', label: 'Intermedio' },
-    { value: 'Avanzado', label: 'Avanzado' }
-  ]
-
-  const resourceTypes = [
-    { value: 'Resumen esquemático', label: 'Resumen esquemático' },
-    { value: 'Ejercicios prácticos con soluciones', label: 'Ejercicios prácticos con soluciones' },
-    { value: 'Cuestionario de preguntas/respuestas', label: 'Cuestionario de preguntas/respuestas' },
-    { value: 'Aprender Jugando', label: 'Aprender Jugando (por defecto)' }
-  ]
-
-  const gameOptions = [
-    { value: 'Cuestionarios interactivos', label: 'Cuestionarios interactivos' },
-    { value: 'Arrastrar y soltar', label: 'Arrastrar y soltar' },
-    { value: 'Juegos de memoria', label: 'Juegos de memoria' },
-    { value: 'Simulaciones', label: 'Simulaciones' },
-    { value: 'Presentaciones interactivas', label: 'Presentaciones interactivas' },
-    { value: 'Líneas de tiempo interactivas', label: 'Líneas de tiempo interactivas' }
-  ]
+    if (isOpen) {
+      loadProfile()
+    }
+  }, [isOpen, user?.id])
 
   const handleSubmit = async () => {
     // Validar que el usuario esté autenticado
@@ -110,88 +95,60 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
       return
     }
 
-    if (formData.selectedGames.length === 0) {
-      toast({
-        title: 'Juegos requeridos',
-        description: 'Por favor selecciona al menos un tipo de juego/actividad',
-        status: 'error',
-        duration: 3000,
-        isClosable: true
-      })
-      return
-    }
-
     setIsGenerating(true)
 
     try {
-      // Preparar datos para Gemini
+      // Preparar datos para OpenRouter usando perfil de Supabase como fuente principal
       const resourceData: ResourceFormData = {
         subject: formData.subject,
         topic: formData.topic,
-        difficulty: formData.difficulty,
-        resourceType: formData.resourceType,
-        selectedGames: formData.selectedGames
+        // La dificultad se deducirá automáticamente en base a la edad y objetivo de aprendizaje
+        userBirthData: {
+          birth_day: profileBirth.birth_day || user.user_metadata?.birth_day,
+          birth_month: profileBirth.birth_month || user.user_metadata?.birth_month,
+          birth_year: profileBirth.birth_year || user.user_metadata?.birth_year
+        },
+        learningGoal: profileLearningGoal || user.user_metadata?.learning_goal
       }
 
-      const userPrefs: UserPreferences = {
-        academicLevel: userPreferences?.academicLevel || 'Universidad',
-        formatPreferences: userPreferences?.formatPreferences || userPreferences?.preferredFormats || ['Contenido Interactivo'],
-        interactiveActivities: userPreferences?.interactiveActivities || userPreferences?.preferredGames || formData.selectedGames
-      }
-
-      console.log('🚀 Generando recurso con Gemini...')
+      console.log('🚀 Generando recurso con OpenRouter (Match up)...')
       console.log('📋 Datos del formulario:', resourceData)
-      console.log('👤 Preferencias del usuario:', userPrefs)
+      console.log('👤 Datos del usuario (perfil Supabase + metadata):', {
+        birthData: resourceData.userBirthData,
+        learningGoal: resourceData.learningGoal
+      })
 
-      // Generar recurso con Gemini
-      const generatedResource = await generateEducationalResource(resourceData, userPrefs)
+      // Generar recurso con OpenRouter (Match up)
+      const generatedResource = await generateMatchUpResource(resourceData, { userId: user.id })
 
       console.log('✅ Recurso generado exitosamente:', generatedResource)
 
-      // Guardar recurso en Supabase
-      console.log('💾 Guardando recurso en Supabase...')
-      const resourceToSave: CreateResourceData = {
+      // Guardar un único recurso combinado (Match up)
+      const saveCombined: CreateResourceData = {
         user_id: user.id,
         title: generatedResource.title,
         subject: formData.subject,
         topic: formData.topic,
-        difficulty: formData.difficulty as 'Básico' | 'Intermedio' | 'Avanzado',
-        resource_type: formData.resourceType,
-        selected_games: formData.selectedGames,
+        difficulty: generatedResource.difficulty || 'Intermedio',
         content: generatedResource
       }
+      const { data: savedCombined, error: saveErrCombined } = await saveEducationalResource(saveCombined)
+      if (saveErrCombined) throw saveErrCombined
 
-      const { data: savedResource, error: saveError } = await saveEducationalResource(resourceToSave)
-
-      if (saveError) {
-        console.error('❌ Error al guardar recurso:', saveError)
-        toast({
-          title: 'Recurso generado pero no guardado',
-          description: 'El recurso se generó correctamente pero hubo un error al guardarlo. Por favor intenta nuevamente.',
-          status: 'warning',
-          duration: 5000,
-          isClosable: true
-        })
-        return
-      }
-
-      console.log('✅ Recurso guardado exitosamente en Supabase:', savedResource)
+      console.log('✅ Recurso combinado guardado en Supabase:', { savedCombined })
 
       toast({
-        title: '¡Recurso creado exitosamente!',
-        description: `Se ha creado y guardado el recurso "${generatedResource.title}"`,
+        title: '¡Recurso creado!',
+        description: 'Se ha creado un recurso Match up con modos de líneas e imágenes. Las imágenes se han cacheado en Supabase para acelerar futuros usos.',
         status: 'success',
-        duration: 5000,
+        duration: 6000,
         isClosable: true
       })
 
-      // Resetear formulario manteniendo las preferencias del usuario
+      // Resetear formulario
       setFormData({
         subject: '',
-        topic: '',
-        difficulty: 'Básico',
-        resourceType: userPreferences?.preferredFormats?.[0] || 'Aprender Jugando',
-        selectedGames: userPreferences?.preferredGames || []
+        topic: ''
       })
       
       onClose()
@@ -219,92 +176,33 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
         <ModalCloseButton />
         <ModalBody>
           <VStack spacing={6} align="stretch">
-            <HStack spacing={4} align="start">
-              <FormControl isRequired flex={1}>
-                <FormLabel>Materia / Curso</FormLabel>
-                <Input
-                  placeholder="Ej: Matemáticas, Historia, Programación..."
-                  value={formData.subject}
-                  onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                />
-              </FormControl>
-
-              <FormControl isRequired flex={1}>
-                <FormLabel>Tema</FormLabel>
-                <Input
-                  placeholder="Ej: Ecuaciones cuadráticas, Segunda Guerra Mundial..."
-                  value={formData.topic}
-                  onChange={(e) => setFormData({ ...formData, topic: e.target.value })}
-                />
-              </FormControl>
-            </HStack>
-
-            <HStack spacing={4} align="start">
-              <FormControl flex={1}>
-                <FormLabel>Tipo de recurso</FormLabel>
-                <Select
-                  value={formData.resourceType}
-                  onChange={(e) => setFormData({ ...formData, resourceType: e.target.value })}
-                >
-                  {resourceTypes.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
-                    </option>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <FormControl flex={1}>
-                <FormLabel>Dificultad</FormLabel>
-                <Select
-                  value={formData.difficulty}
-                  onChange={(e) => setFormData({ ...formData, difficulty: e.target.value })}
-                >
-                  {difficultyOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
-              </FormControl>
-            </HStack>
-
-            <FormControl>
-              <FormLabel>
-                Juegos/actividades interactivas preferidas
-                <Text fontSize="sm" color="gray.600" mt={1}>
-                  {formData.resourceType === 'Aprender Jugando' 
-                    ? '(Actividades principales para tu recurso)' 
-                    : '(Actividades complementarias para reforzar el aprendizaje)'}
-                </Text>
-              </FormLabel>
-              <CheckboxGroup
-                value={formData.selectedGames}
-                onChange={(values) => setFormData({ ...formData, selectedGames: values as string[] })}
-              >
-                <SimpleGrid columns={2} spacing={3} mt={3}>
-                  {gameOptions.map((game) => (
-                    <Checkbox 
-                      key={game.value} 
-                      value={game.value}
-                      colorScheme="blackAlpha"
-                      sx={{
-                        '& .chakra-checkbox__control[data-checked]': {
-                          backgroundColor: 'black',
-                          borderColor: 'black',
-                          color: 'white'
-                        },
-                        '& .chakra-checkbox__control:hover': {
-                          borderColor: 'black'
-                        }
-                      }}
-                    >
-                      {game.label}
-                    </Checkbox>
-                  ))}
-                </SimpleGrid>
-              </CheckboxGroup>
+            <Text fontSize="md" color="gray.600" textAlign="center">
+              Ingresa la materia y el tema para generar un recurso educativo interactivo personalizado
+            </Text>
+            
+            <FormControl isRequired>
+              <FormLabel>Materia / Curso</FormLabel>
+              <Input
+                placeholder="Ej: Matemáticas, Historia, Programación, Biología..."
+                value={formData.subject}
+                onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                size="lg"
+              />
             </FormControl>
+
+            <FormControl isRequired>
+              <FormLabel>Tema</FormLabel>
+              <Input
+                placeholder="Ej: Ecuaciones cuadráticas, Segunda Guerra Mundial, Funciones en JavaScript..."
+                value={formData.topic}
+                onChange={(e) => setFormData({ ...formData, topic: e.target.value })}
+                size="lg"
+              />
+            </FormControl>
+
+            <Text fontSize="sm" color="gray.500" textAlign="center" fontStyle="italic">
+              El recurso se generará automáticamente con contenido interactivo basado en tus preferencias de aprendizaje
+            </Text>
           </VStack>
         </ModalBody>
 
@@ -323,7 +221,7 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
               loadingText="Generando con IA..."
               leftIcon={isGenerating ? <Spinner size="sm" /> : undefined}
             >
-              {isGenerating ? 'Generando...' : 'Generar Recurso con Gemini'}
+              {isGenerating ? 'Generando...' : (profileLoading ? 'Cargando perfil...' : 'Generar Recurso')}
             </Button>
           </HStack>
         </ModalFooter>

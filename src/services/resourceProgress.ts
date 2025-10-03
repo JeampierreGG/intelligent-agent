@@ -1,0 +1,46 @@
+export type ResourceStage = 'study' | 'lines' | 'images' | 'summary'
+
+export interface ResourceProgressData {
+  stage: ResourceStage
+  studyIndex: number
+  studyItemCompleted?: boolean
+  linesCompleted?: boolean
+  imagesCompleted?: boolean
+  updatedAt?: string
+}
+
+const keyFor = (userId: string, resourceId: string) => `resource_progress_${userId}_${resourceId}`
+
+export function getResourceProgress(userId: string, resourceId: string): ResourceProgressData | null {
+  try {
+    const raw = localStorage.getItem(keyFor(userId, resourceId))
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    return parsed as ResourceProgressData
+  } catch (e) {
+    console.warn('getResourceProgress error:', e)
+    return null
+  }
+}
+
+export function saveResourceProgress(userId: string, resourceId: string, data: Partial<ResourceProgressData>) {
+  try {
+    const current = getResourceProgress(userId, resourceId) || { stage: 'study', studyIndex: 0 }
+    const merged: ResourceProgressData = {
+      ...current,
+      ...data,
+      updatedAt: new Date().toISOString(),
+    }
+    localStorage.setItem(keyFor(userId, resourceId), JSON.stringify(merged))
+  } catch (e) {
+    console.warn('saveResourceProgress error:', e)
+  }
+}
+
+export function clearResourceProgress(userId: string, resourceId: string) {
+  try {
+    localStorage.removeItem(keyFor(userId, resourceId))
+  } catch (e) {
+    console.warn('clearResourceProgress error:', e)
+  }
+}

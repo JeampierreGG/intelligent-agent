@@ -6,8 +6,6 @@ CREATE TABLE IF NOT EXISTS educational_resources (
   subject TEXT NOT NULL,
   topic TEXT NOT NULL,
   difficulty TEXT NOT NULL CHECK (difficulty IN ('Básico', 'Intermedio', 'Avanzado')),
-  resource_type TEXT NOT NULL,
-  selected_games TEXT[] NOT NULL DEFAULT '{}',
   content JSONB NOT NULL, -- Almacena el contenido completo del recurso
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

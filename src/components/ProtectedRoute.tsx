@@ -4,14 +4,10 @@ import { Box, Spinner, VStack, Text } from '@chakra-ui/react'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
-  requiresQuestionnaire?: boolean
 }
 
-export default function ProtectedRoute({ 
-  children, 
-  requiresQuestionnaire = true 
-}: ProtectedRouteProps) {
-  const { user, loading, hasCompletedQuestionnaire } = useAuth()
+export default function ProtectedRoute({ children }: ProtectedRouteProps) {
+  const { user, loading } = useAuth()
   const location = useLocation()
 
   // Mostrar loading mientras se verifica la autenticación
@@ -35,29 +31,6 @@ export default function ProtectedRoute({
   // Si no está autenticado, redirigir al login
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />
-  }
-
-  // Si requiere cuestionario y aún se está verificando
-  if (requiresQuestionnaire && hasCompletedQuestionnaire === null) {
-    return (
-      <Box 
-        height="100vh" 
-        display="flex" 
-        alignItems="center" 
-        justifyContent="center"
-        bg="gray.50"
-      >
-        <VStack spacing={4}>
-          <Spinner size="xl" color="blue.500" thickness="4px" />
-          <Text color="gray.600">Verificando perfil...</Text>
-        </VStack>
-      </Box>
-    )
-  }
-
-  // Si requiere cuestionario y no lo ha completado (o aún no se ha verificado), redirigir
-  if (requiresQuestionnaire && hasCompletedQuestionnaire !== true) {
-    return <Navigate to="/questionnaire" replace />
   }
 
   // Si todo está bien, mostrar el contenido protegido

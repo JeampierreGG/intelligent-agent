@@ -4,8 +4,6 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
-import InitialQuestionnaire from './pages/InitialQuestionnaire'
-import ProtectedRoute from './components/ProtectedRoute'
 import { DashboardProtectedRoute } from './components/DashboardProtectedRoute'
 
 // Componente para rutas públicas (solo accesibles si no está logueado)
@@ -44,14 +42,7 @@ function App() {
                 </PublicRoute>
               } 
             />
-            <Route 
-              path="/initial-questionnaire" 
-              element={
-                <ProtectedRoute requiresQuestionnaire={false}>
-                  <InitialQuestionnaire />
-                </ProtectedRoute>
-              } 
-            />
+
             <Route 
               path="/dashboard" 
               element={

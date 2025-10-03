@@ -22,6 +22,12 @@ dist-ssr
 # Carpetas de ejemplo y desarrollo
 ejemplo/
 
+# No subir documentación local
+docs/
+
+# Configuración local no versionada
+src/config/elementUsage.local.ts
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
