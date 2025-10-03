@@ -136,13 +136,10 @@ export default function Login() {
                 />
               </FormControl>
 
-              <Flex justify="space-between" align="center">
+              <Flex justify="flex-start" align="center">
                 <Checkbox size="sm" colorScheme="teal">
                   Recordarme
                 </Checkbox>
-                <Link fontSize="sm" color="teal.500">
-                  ¿Olvidaste tu contraseña?
-                </Link>
               </Flex>
 
               <Button
