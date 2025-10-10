@@ -36,7 +36,7 @@ export function decideStudyElements(formData: ResourceFormData): StudyElementDec
 
   // Historia: contenido lineal + evidencia visual
   if (isHistory) {
-    decisions.push({ type: 'timeline', reason: 'Estudiar eventos/biografías/evoluciones en orden cronológico.', prefersWikimedia: true })
+    decisions.push({ type: 'timeline', reason: 'Estudiar eventos/biografías/evoluciones en orden cronológico.', prefersWikimedia: true, maxUnits: 10 })
     decisions.push({ type: 'course_presentation', reason: 'Resumen en diapositivas con imágenes reales para cada hito.', prefersWikimedia: true, maxUnits: 12 })
     decisions.push({ type: 'image_gallery', reason: 'Refuerzo visual de artefactos/personajes/escenas históricas.', prefersWikimedia: true, maxUnits: 6 })
   }

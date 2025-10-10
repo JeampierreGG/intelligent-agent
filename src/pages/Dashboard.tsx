@@ -45,10 +45,15 @@ import { useNavigate } from 'react-router-dom'
 import NewResourceModal from '../components/modals/NewResourceModal'
 import MatchUpLines from '../components/templates/MatchUpLines'
 import MatchUpImages from '../components/templates/MatchUpImages'
+import Quiz from '../components/templates/Quiz'
+import GroupSort from '../components/templates/GroupSort'
+import Anagram from '../components/templates/Anagram'
+import OpenTheBox from '../components/templates/OpenTheBox'
 import CoursePresentation from '../components/templates/CoursePresentation'
 import AccordionNotes from '../components/templates/AccordionNotes'
 import Timeline from '../components/templates/Timeline'
-import type { MatchUpContent, StudyElement } from '../services/types'
+import FindTheMatch from '../components/templates/FindTheMatch'
+import type { MatchUpContent, StudyElement, QuizContent, GroupSortContent, AnagramContent, OpenTheBoxContent, FindTheMatchContent } from '../services/types'
 import logoImage from '../assets/Logo-IA.png'
 
 import { getUserResources, type EducationalResource } from '../services/resources'
@@ -81,13 +86,30 @@ export default function Dashboard() {
   const [activeResourceIds, setActiveResourceIds] = useState<Set<string>>(new Set())
   const [completedResourceIds, setCompletedResourceIds] = useState<Set<string>>(new Set())
   const [studyIndex, setStudyIndex] = useState<number>(0)
-  const [matchUpStage, setMatchUpStage] = useState<'study' | 'lines' | 'images' | 'summary' | null>(null)
+const [matchUpStage, setMatchUpStage] = useState<'study' | 'quiz' | 'quiz_summary' | 'lines' | 'lines_summary' | 'images' | 'group_sort' | 'group_sort_summary' | 'find_the_match' | 'open_box' | 'anagram' | 'summary' | null>(null)
   const [linesCompleted, setLinesCompleted] = useState<boolean>(false)
   const [imagesCompleted, setImagesCompleted] = useState<boolean>(false)
+  const [quizCompleted, setQuizCompleted] = useState<boolean>(false)
+  const [groupSortCompleted, setGroupSortCompleted] = useState<boolean>(false)
   const [playingTitle, setPlayingTitle] = useState<string>('')
   const [linesResults, setLinesResults] = useState<Array<{ term: string; chosen: string; expected: string; correct: boolean }>>([])
   const [imagesResults, setImagesResults] = useState<Array<{ expected: string; chosen?: string; imageDescription: string; imageUrl?: string }>>([])
+  const [quizResults, setQuizResults] = useState<Array<{ prompt: string; chosenIndex: number; correctIndex: number; chosenText: string; correctText: string; correct: boolean; explanation?: string }>>([])
+  const [groupSortResults, setGroupSortResults] = useState<Array<{ item: string; chosenGroup: string; expectedGroup: string; correct: boolean }>>([])
   const [currentAttemptId, setCurrentAttemptId] = useState<string | null>(null)
+  const [playingQuiz, setPlayingQuiz] = useState<QuizContent | null>(null)
+  const [playingGroupSort, setPlayingGroupSort] = useState<GroupSortContent | null>(null)
+  const [playingAnagram, setPlayingAnagram] = useState<AnagramContent | null>(null)
+  const [playingOpenBox, setPlayingOpenBox] = useState<OpenTheBoxContent | null>(null)
+  const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchContent | null>(null)
+  const [anagramCompleted, setAnagramCompleted] = useState<boolean>(false)
+  const [openBoxCompleted, setOpenBoxCompleted] = useState<boolean>(false)
+  const [findMatchCompleted, setFindMatchCompleted] = useState<boolean>(false)
+  const [anagramResults, setAnagramResults] = useState<Array<{ answer: string; userAnswer: string; correct: boolean; clue?: string }>>([])
+  const [openBoxResults, setOpenBoxResults] = useState<Array<{ question: string; options: string[]; chosenIndex: number; correctIndex: number; chosenText: string; correctText: string; correct: boolean; explanation?: string }>>([])
+  const [findMatchResults, setFindMatchResults] = useState<Array<{ concept: string; chosen?: string; expected: string; correct: boolean }>>([])
+  // Mostrar estado de carga cuando se inicia un nuevo intento para evitar parpadeo de selecciones previas
+  const [startingNewAttempt, setStartingNewAttempt] = useState<boolean>(false)
   // IDs persistidos en BD para poder asociar puntajes
   const [matchupLinesId, setMatchupLinesId] = useState<string | null>(null)
   const [matchupImagesId, setMatchupImagesId] = useState<string | null>(null)
@@ -329,20 +351,60 @@ export default function Dashboard() {
 
   const handlePlayResource = async (resource: EducationalResource, options?: { forceNewSession?: boolean }) => {
     try {
-  const matchUp = resource.content?.gameelement || resource.content?.gameElements || resource.content?.matchUp
+  const matchUp = resource.content?.gameelement?.matchUp || resource.content?.matchUp || (resource.content as any)?.gameElements
       const studyEls = resource.content?.studyElements || []
+      const quiz = resource.content?.gameelement?.quiz || (resource.content as any)?.quiz || (resource.content as any)?.gameElements?.quiz
+      const groupSort = resource.content?.gameelement?.groupSort || (resource.content as any)?.groupSort || (resource.content as any)?.gameElements?.groupSort
+      const anagram = resource.content?.gameelement?.anagram || (resource.content as any)?.anagram || (resource.content as any)?.gameElements?.anagram
+      const openTheBox = resource.content?.gameelement?.openTheBox || (resource.content as any)?.openTheBox || (resource.content as any)?.gameElements?.openTheBox
+      const findTheMatch = resource.content?.gameelement?.findTheMatch || (resource.content as any)?.findTheMatch || (resource.content as any)?.gameElements?.findTheMatch
+      // Si se fuerza un nuevo intento, limpiar inmediatamente el estado local y el identificador del intento
+      // para que la UI se muestre en blanco mientras se crea el nuevo intento en segundo plano.
+      if (options?.forceNewSession) {
+        setStartingNewAttempt(true)
+        setCurrentAttemptId(null)
+        setLinesCompleted(false)
+        setImagesCompleted(false)
+        setQuizCompleted(false)
+        setGroupSortCompleted(false)
+        setAnagramCompleted(false)
+        setOpenBoxCompleted(false)
+        setFindMatchCompleted(false)
+        setLinesResults([])
+        setImagesResults([])
+        setQuizResults([])
+        setGroupSortResults([])
+        setAnagramResults([])
+        setOpenBoxResults([])
+        setFindMatchResults([])
+      }
       if (matchUp && matchUp.templateType === 'match_up' && matchUp.linesMode?.pairs?.length > 0) {
         setPlayingMatchUp(matchUp)
         const preparedStudy = studyEls.slice(0, 2)
         setPlayingStudyElements(preparedStudy)
+        setPlayingQuiz(quiz || null)
+        setPlayingGroupSort(groupSort || null)
         setPlayingResourceId(resource.id)
         setStudyIndex(0)
         setPlayingTitle(resource.title)
-        setMatchUpStage(studyEls.length > 0 ? 'study' : 'lines')
+        setMatchUpStage(studyEls.length > 0 ? 'study' : (quiz ? 'quiz' : 'lines'))
         setLinesCompleted(false)
         setActiveSection('recursos') // mantener contexto de sección
         setLinesResults([])
         setImagesResults([])
+        setQuizResults([])
+        setGroupSortResults([])
+        setQuizCompleted(false)
+        setGroupSortCompleted(false)
+        setPlayingAnagram(anagram || null)
+        setPlayingOpenBox(openTheBox || null)
+        setPlayingFindTheMatch(findTheMatch || null)
+        setAnagramCompleted(false)
+        setOpenBoxCompleted(false)
+        setFindMatchCompleted(false)
+        setAnagramResults([])
+        setOpenBoxResults([])
+        setFindMatchResults([])
         // Iniciar/Reanudar sesión del recurso (temporizador)
         if (user?.id) {
           const { getActiveResourceSession, startResourceSession, endResourceSession } = await import('../services/resourceSessions')
@@ -369,6 +431,8 @@ export default function Dashboard() {
               setCurrentAttemptId(attempt.id || null)
             } catch (e) {
               console.warn('No se pudo iniciar intento nuevo:', e)
+            } finally {
+              setStartingNewAttempt(false)
             }
           } else if (active) {
             setCurrentSessionId(active.id)
@@ -406,7 +470,7 @@ export default function Dashboard() {
             setStudyItemCompleted(!!prog.studyItemCompleted)
             setLinesCompleted(!!prog.linesCompleted)
             setImagesCompleted(!!prog.imagesCompleted)
-            const desiredStage = preparedStudy.length > 0 ? prog.stage : 'lines'
+            const desiredStage = preparedStudy.length > 0 ? prog.stage : (quiz ? 'quiz' : 'lines')
             setMatchUpStage(desiredStage)
           }
         }
@@ -711,6 +775,7 @@ export default function Dashboard() {
                               leftIcon={<Icon as={FiRefreshCw} />}
                               flex={1}
                               isDisabled={!(activeResourceIds.has(resource.id) || completedResourceIds.has(resource.id))}
+                              isLoading={startingNewAttempt}
                               onClick={() => handlePlayResource(resource, { forceNewSession: true })}
                             >
                               Comenzar de nuevo
@@ -914,7 +979,7 @@ export default function Dashboard() {
                     // Guardar progreso actual antes de salir
                     if (user?.id && playingResourceId) {
                       saveResourceProgress(user.id, playingResourceId, {
-                        stage: matchUpStage ?? 'study',
+                          stage: (matchUpStage ?? 'study') as any,
                         studyIndex,
                         studyItemCompleted,
                         linesCompleted,
@@ -934,6 +999,12 @@ export default function Dashboard() {
                     <Icon as={FiClock} />
                     <Text fontSize="sm">Tiempo: {new Date(elapsedSeconds * 1000).toISOString().substring(11, 19)}</Text>
                   </HStack>
+                </HStack>
+              )}
+              {startingNewAttempt && (
+                <HStack mt={2}>
+                  <Spinner size="sm" />
+                  <Text fontSize="sm" color="gray.600">Iniciando nuevo intento...</Text>
                 </HStack>
               )}
               <Card bg={cardBg} shadow="sm" borderWidth="1px" borderColor={borderColor}>
@@ -972,9 +1043,9 @@ export default function Dashboard() {
                                       })
                                     }
                                   } else {
-                                    setMatchUpStage('lines')
+                                    setMatchUpStage(playingQuiz ? 'quiz' : 'lines')
                                     if (user?.id && playingResourceId) {
-                                      saveResourceProgress(user.id, playingResourceId, { stage: 'lines' })
+                                      saveResourceProgress(user.id, playingResourceId, { stage: playingQuiz ? 'quiz' : 'lines' })
                                     }
                                   }
                                 }}>Continuar</Button>
@@ -1008,9 +1079,9 @@ export default function Dashboard() {
                                       })
                                     }
                                   } else {
-                                    setMatchUpStage('lines')
+                                    setMatchUpStage(playingQuiz ? 'quiz' : 'lines')
                                     if (user?.id && playingResourceId) {
-                                      saveResourceProgress(user.id, playingResourceId, { stage: 'lines' })
+                                      saveResourceProgress(user.id, playingResourceId, { stage: playingQuiz ? 'quiz' : 'lines' })
                                     }
                                   }
                                 }}>Continuar</Button>
@@ -1058,6 +1129,59 @@ export default function Dashboard() {
                       })()}
                     </>
                   )}
+                  {matchUpStage === 'quiz' && playingQuiz && (
+                    <>
+                      <Quiz
+                        key={`quiz-${currentAttemptId ?? 'noattempt'}-${playingResourceId ?? 'nores'}`}
+                        content={playingQuiz}
+                        onComplete={(result) => {
+                          setQuizCompleted(true)
+                          setQuizResults(result.details || [])
+                          if (user?.id && playingResourceId) {
+                            saveResourceProgress(user.id, playingResourceId, { stage: 'quiz' })
+                          }
+                        }}
+                      />
+                      <HStack mt={4}>
+                        <Button colorScheme="blue" onClick={() => {
+                          // Ir directamente al siguiente elemento de juego después del quiz
+                          setMatchUpStage('lines')
+                          if (user?.id && playingResourceId) {
+                            saveResourceProgress(user.id, playingResourceId, { stage: 'lines' })
+                          }
+                        }} isDisabled={!quizCompleted}>Continuar</Button>
+                      </HStack>
+                    </>
+                  )}
+                  {matchUpStage === 'quiz_summary' && (
+                    <VStack align="stretch" spacing={4}>
+                      <Text fontSize="lg" fontWeight="bold">Resumen del Quiz</Text>
+                      {quizResults.length === 0 ? (
+                        <Text fontSize="sm" color="gray.600">No hay resultados para mostrar.</Text>
+                      ) : (
+                        quizResults.map((q, idx) => (
+                          <Box key={`quiz-sum-${idx}`} p={3} borderWidth="1px" borderRadius="md" borderColor={q.correct ? 'green.300' : 'red.300'} bg={q.correct ? 'green.50' : 'red.50'}>
+                            <Text fontSize="sm" fontWeight="semibold">{q.prompt}</Text>
+                            <Text fontSize="sm">Tu respuesta: {q.chosenText || 'Sin respuesta'}</Text>
+                            {!q.correct && (
+                              <Text fontSize="xs" color="red.600">Correcta: {q.correctText}</Text>
+                            )}
+                            {q.explanation && (
+                              <Text fontSize="xs" color="gray.600">Explicación: {q.explanation}</Text>
+                            )}
+                          </Box>
+                        ))
+                      )}
+                      <HStack mt={2}>
+                        <Button colorScheme="blue" onClick={() => {
+                          setMatchUpStage('lines')
+                          if (user?.id && playingResourceId) {
+                            saveResourceProgress(user.id, playingResourceId, { stage: 'lines' })
+                          }
+                        }}>Continuar</Button>
+                      </HStack>
+                    </VStack>
+                  )}
                   {matchUpStage === 'lines' && (
                     <>
                       <MatchUpLines
@@ -1082,33 +1206,55 @@ export default function Dashboard() {
                         }}
                       />
                       <HStack mt={4}>
+                        <Button colorScheme="blue" onClick={async () => { 
+                          // Guardar puntaje de líneas y mostrar resumen
+                          await saveScoresForCurrentResource?.('lines')
+                          setMatchUpStage('lines_summary')
+                          if (user?.id && playingResourceId) {
+                            saveResourceProgress(user.id, playingResourceId, { stage: 'lines_summary' as any })
+                          }
+                        }} isDisabled={!linesCompleted}>
+                          Continuar
+                        </Button>
+                      </HStack>
+                    </>
+                  )}
+                  {matchUpStage === 'lines_summary' && (
+                    <VStack align="stretch" spacing={4}>
+                      <Text fontSize="lg" fontWeight="bold">Resumen de Emparejar líneas</Text>
+                      {linesResults.length === 0 ? (
+                        <Text fontSize="sm" color="gray.600">No hay resultados para mostrar.</Text>
+                      ) : (
+                        linesResults.map((r, idx) => (
+                          <Box key={`lines-sum-${idx}`} p={3} borderWidth="1px" borderRadius="md" borderColor={r.correct ? 'green.300' : 'red.300'} bg={r.correct ? 'green.50' : 'red.50'}>
+                            <Text fontSize="sm" fontWeight="semibold">{r.term}</Text>
+                            <Text fontSize="sm">Tu emparejamiento: {r.chosen || 'Sin respuesta'}</Text>
+                            {!r.correct && (
+                              <Text fontSize="xs" color="red.600">Correcto: {r.expected}</Text>
+                            )}
+                          </Box>
+                        ))
+                      )}
+                      <HStack mt={2}>
                         {playingMatchUp.imagesMode && playingMatchUp.imagesMode.items && playingMatchUp.imagesMode.items.length > 0 ? (
-                          <Button colorScheme="blue" onClick={async () => { 
-                            // Guardar puntaje de líneas al continuar
-                            await saveScoresForCurrentResource?.('lines')
+                          <Button colorScheme="blue" onClick={() => {
                             setMatchUpStage('images')
                             if (user?.id && playingResourceId) {
                               saveResourceProgress(user.id, playingResourceId, { stage: 'images' })
                             }
-                          }} isDisabled={!linesCompleted}>
-                            Continuar
-                          </Button>
+                          }}>Continuar</Button>
                         ) : (
-                          <Button colorScheme="blue" onClick={async () => { 
-                            // Guardar puntaje de líneas al finalizar
-                            await saveScoresForCurrentResource?.('lines')
+                          <Button colorScheme="blue" onClick={async () => {
                             await finalizeSession()
                             setMatchUpStage('summary')
                             if (user?.id && playingResourceId) {
                               saveResourceProgress(user.id, playingResourceId, { stage: 'summary' })
                               setCompletedResourceIds(prev => new Set([...prev, playingResourceId]))
                             }
-                          }} isDisabled={!linesCompleted}>
-                            Continuar
-                          </Button>
+                          }}>Finalizar</Button>
                         )}
                       </HStack>
-                    </>
+                    </VStack>
                   )}
                   {matchUpStage === 'images' && playingMatchUp.imagesMode && (
                     <>
@@ -1137,21 +1283,283 @@ export default function Dashboard() {
                         <Button colorScheme="blue" onClick={async () => { 
                           // Guardar puntaje de imágenes al finalizar
                           await saveScoresForCurrentResource?.('images')
+                          if (playingGroupSort) {
+                            setMatchUpStage('group_sort')
+                            if (user?.id && playingResourceId) {
+                              saveResourceProgress(user.id, playingResourceId, { stage: 'group_sort' })
+                            }
+                          } else {
+                            await finalizeSession()
+                            setMatchUpStage('summary')
+                            if (user?.id && playingResourceId) {
+                              saveResourceProgress(user.id, playingResourceId, { stage: 'summary' })
+                              setCompletedResourceIds(prev => new Set([...prev, playingResourceId]))
+                            }
+                          }
+                        }} isDisabled={!imagesCompleted}>
+                          Continuar
+                        </Button>
+                      </HStack>
+                    </>
+                  )}
+                  {matchUpStage === 'group_sort' && playingGroupSort && (
+                    <>
+                      <GroupSort
+                        key={`gs-${currentAttemptId ?? 'noattempt'}-${playingResourceId ?? 'nores'}`}
+                        content={playingGroupSort}
+                        onComplete={(res) => {
+                          setGroupSortCompleted(true)
+                          // Calcular resultados: item -> (grupo elegido vs esperado)
+                          const expectedMap: Record<string, string> = {}
+                          playingGroupSort.groups.forEach(g => g.items.forEach(i => { expectedMap[i] = g.name }))
+                          const results = Object.entries(res.placements).map(([item, grp]) => ({
+                            item,
+                            chosenGroup: grp || '',
+                            expectedGroup: expectedMap[item],
+                            correct: (grp || '') === expectedMap[item]
+                          }))
+                          setGroupSortResults(results)
+                          if (user?.id && playingResourceId) {
+                            saveResourceProgress(user.id, playingResourceId, { stage: 'group_sort' })
+                          }
+                        }}
+                      />
+                      <HStack mt={4}>
+                        <Button colorScheme="blue" onClick={async () => {
+                          await finalizeSession()
+                          setMatchUpStage('group_sort_summary')
+                          if (user?.id && playingResourceId) {
+                            saveResourceProgress(user.id, playingResourceId, { stage: 'group_sort_summary' as any })
+                          }
+                        }} isDisabled={!groupSortCompleted}>Continuar</Button>
+                      </HStack>
+                    </>
+                  )}
+                  {matchUpStage === 'group_sort_summary' && (
+                    <VStack align="stretch" spacing={4}>
+                      <Text fontSize="lg" fontWeight="bold">Resumen de Ordenar por grupo</Text>
+                      {groupSortResults.length === 0 ? (
+                        <Text fontSize="sm" color="gray.600">No hay resultados para mostrar.</Text>
+                      ) : (
+                        (() => {
+                          const groupNames = playingGroupSort?.groups.map(g => g.name) ?? []
+                          const grouped: Record<string, Array<{ item: string; correct: boolean; expectedGroup: string }>> = {}
+                          groupNames.forEach(name => { grouped[name] = [] })
+                          // No mostrar el cuadro de 'Sin grupo' en el resumen
+                          groupSortResults.forEach(r => {
+                            const key = r.chosenGroup || ''
+                            if (!key) return // omitir elementos sin grupo para no renderizar 'Sin grupo'
+                            if (!grouped[key]) grouped[key] = []
+                            grouped[key].push({ item: r.item, correct: r.correct, expectedGroup: r.expectedGroup })
+                          })
+                          return (
+                            <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={4}>
+                              {Object.entries(grouped).map(([grp, items]) => (
+                                <Box key={`gs-sum-grp-${grp}`} p={3} borderWidth="1px" borderRadius="md">
+                                  <Text fontWeight="semibold" mb={2}>{grp}</Text>
+                                  <HStack flexWrap="wrap" gap={2}>
+                                    {items.length === 0 && (
+                                      <Text fontSize="sm" color="gray.500">(sin elementos)</Text>
+                                    )}
+                                    {items.map((it, iidx) => (
+                                      <Box key={`gs-sum-item-${grp}-${iidx}`} px={2} py={1} borderWidth="1px" borderRadius="md" borderColor={it.correct ? 'green.300' : 'red.300'} bg={it.correct ? 'green.50' : 'red.50'}>
+                                        <Text fontSize="sm">{it.item}</Text>
+                                        {!it.correct && (
+                                          <Text fontSize="xs" color="red.600">Correcto: {it.expectedGroup}</Text>
+                                        )}
+                                      </Box>
+                                    ))}
+                                  </HStack>
+                                </Box>
+                              ))}
+                            </SimpleGrid>
+                          )
+                        })()
+                      )}
+                      <HStack mt={2}>
+                        <Button colorScheme="blue" onClick={() => {
+                          const nextStage = playingFindTheMatch ? 'find_the_match' : (playingOpenBox ? 'open_box' : (playingAnagram ? 'anagram' : 'summary'))
+                          setMatchUpStage(nextStage as any)
+                          if (user?.id && playingResourceId) {
+                            saveResourceProgress(user.id, playingResourceId, { stage: nextStage as any })
+                            if (nextStage === 'summary') {
+                              setCompletedResourceIds(prev => new Set([...prev, playingResourceId]))
+                            }
+                          }
+                        }}>Continuar</Button>
+                      </HStack>
+                    </VStack>
+                  )}
+                  {matchUpStage === 'find_the_match' && playingFindTheMatch && (
+                    <>
+                      <FindTheMatch
+                        key={`ftm-${currentAttemptId ?? 'noattempt'}-${playingResourceId ?? 'nores'}`}
+                        content={playingFindTheMatch}
+                        onComplete={(details) => {
+                          setFindMatchCompleted(true)
+                          setFindMatchResults(details)
+                          if (user?.id && playingResourceId) {
+                            saveResourceProgress(user.id, playingResourceId, { stage: 'find_the_match' as any })
+                          }
+                        }}
+                      />
+                      <HStack mt={4}>
+                        <Button colorScheme="blue" onClick={async () => {
+                          await finalizeSession()
+                          const nextStage = playingOpenBox ? 'open_box' : (playingAnagram ? 'anagram' : 'summary')
+                          setMatchUpStage(nextStage as any)
+                          if (user?.id && playingResourceId) {
+                            saveResourceProgress(user.id, playingResourceId, { stage: nextStage as any })
+                            if (nextStage === 'summary') {
+                              setCompletedResourceIds(prev => new Set([...prev, playingResourceId]))
+                            }
+                          }
+                        }} isDisabled={!findMatchCompleted}>Continuar</Button>
+                      </HStack>
+                    </>
+                  )}
+                  {matchUpStage === 'open_box' && playingOpenBox && (
+                    <>
+                      <OpenTheBox
+                        key={`otb-${currentAttemptId ?? 'noattempt'}-${playingResourceId ?? 'nores'}`}
+                        content={playingOpenBox}
+                        onComplete={(details) => {
+                          setOpenBoxCompleted(true)
+                          setOpenBoxResults(details)
+                          if (user?.id && playingResourceId) {
+                            saveResourceProgress(user.id, playingResourceId, { stage: 'open_box' })
+                          }
+                        }}
+                      />
+                      <HStack mt={4}>
+                        <Button colorScheme="blue" onClick={async () => {
+                          await finalizeSession()
+                          const nextStage = playingAnagram ? 'anagram' : 'summary'
+                          setMatchUpStage(nextStage)
+                          if (user?.id && playingResourceId) {
+                            saveResourceProgress(user.id, playingResourceId, { stage: nextStage as any })
+                            if (nextStage === 'summary') {
+                              setCompletedResourceIds(prev => new Set([...prev, playingResourceId]))
+                            }
+                          }
+                        }} isDisabled={!openBoxCompleted}>Continuar</Button>
+                      </HStack>
+                    </>
+                  )}
+                  {matchUpStage === 'anagram' && playingAnagram && (
+                    <>
+                      <Anagram
+                        key={`an-${currentAttemptId ?? 'noattempt'}-${playingResourceId ?? 'nores'}`}
+                        content={playingAnagram}
+                        onComplete={(details) => {
+                          setAnagramCompleted(true)
+                          setAnagramResults(details)
+                          if (user?.id && playingResourceId) {
+                            saveResourceProgress(user.id, playingResourceId, { stage: 'anagram' as any })
+                          }
+                        }}
+                      />
+                      <HStack mt={4}>
+                        <Button colorScheme="blue" onClick={async () => {
                           await finalizeSession()
                           setMatchUpStage('summary')
                           if (user?.id && playingResourceId) {
                             saveResourceProgress(user.id, playingResourceId, { stage: 'summary' })
                             setCompletedResourceIds(prev => new Set([...prev, playingResourceId]))
                           }
-                        }} isDisabled={!imagesCompleted}>
-                          Finalizar
-                        </Button>
+                        }} isDisabled={!anagramCompleted}>Continuar</Button>
                       </HStack>
                     </>
                   )}
                   {matchUpStage === 'summary' && (
                     <VStack align="stretch" spacing={4}>
                       <Text fontSize="lg" fontWeight="bold">Resumen del recurso</Text>
+                      {openBoxResults.length > 0 && (
+                        <VStack align="stretch" spacing={2}>
+                          <Text fontWeight="semibold">Abrecajas</Text>
+                          {openBoxResults.map((r, idx) => (
+                            <Box key={`sum-otb-${idx}`} p={2} borderWidth="1px" borderRadius="md" borderColor={r.correct ? 'green.300' : 'red.300'} bg={r.correct ? 'green.50' : 'red.50'}>
+                              <Text fontSize="sm"><strong>{r.question}</strong></Text>
+                              <Text fontSize="sm">Tu respuesta: {r.chosenText || 'Sin respuesta'}</Text>
+                              {!r.correct && (
+                                <Text fontSize="xs" color="red.600">Correcta: {r.correctText}</Text>
+                              )}
+                              {r.explanation && (
+                                <Text fontSize="xs" color="gray.600">Explicación: {r.explanation}</Text>
+                              )}
+                            </Box>
+                          ))}
+                        </VStack>
+                      )}
+                      {findMatchResults.length > 0 && (
+                        <VStack align="stretch" spacing={2}>
+                          <Text fontWeight="semibold">Cada oveja con su pareja</Text>
+                          {findMatchResults.map((r, idx) => (
+                            <Box key={`sum-ftm-${idx}`} p={2} borderWidth="1px" borderRadius="md" borderColor={r.correct ? 'green.300' : 'red.300'} bg={r.correct ? 'green.50' : 'red.50'}>
+                              <Text fontSize="sm"><strong>{r.concept}</strong> → {r.chosen || 'Sin respuesta'}</Text>
+                              {!r.correct && (
+                                <Text fontSize="xs" color="red.600">Correcta: {r.expected}</Text>
+                              )}
+                            </Box>
+                          ))}
+                        </VStack>
+                      )}
+                      {quizResults.length > 0 && (
+                        <VStack align="stretch" spacing={2}>
+                          <Text fontWeight="semibold">Quiz</Text>
+                          {quizResults.map((q, idx) => (
+                            <Box key={`sum-quiz-${idx}`} p={2} borderWidth="1px" borderRadius="md" borderColor={q.correct ? 'green.300' : 'red.300'} bg={q.correct ? 'green.50' : 'red.50'}>
+                              <Text fontSize="sm"><strong>{q.prompt}</strong></Text>
+                              <Text fontSize="sm">Tu respuesta: {q.chosenText || 'Sin respuesta'}</Text>
+                              {!q.correct && (
+                                <Text fontSize="xs" color="red.600">Correcta: {q.correctText}</Text>
+                              )}
+                              {q.explanation && (
+                                <Text fontSize="xs" color="gray.600">Explicación: {q.explanation}</Text>
+                              )}
+                            </Box>
+                          ))}
+                        </VStack>
+                      )}
+                      {groupSortResults.length > 0 && (
+                        <VStack align="stretch" spacing={2}>
+                          <Text fontWeight="semibold">Ordenar por grupo</Text>
+                          {(() => {
+                            const groupNames = playingGroupSort?.groups.map(g => g.name) ?? []
+                            const grouped: Record<string, Array<{ item: string; correct: boolean; expectedGroup: string }>> = {}
+                            groupNames.forEach(name => { grouped[name] = [] })
+                            // No incluir 'Sin grupo' en el resumen final
+                            groupSortResults.forEach(r => {
+                              const key = r.chosenGroup || ''
+                              if (!key) return
+                              if (!grouped[key]) grouped[key] = []
+                              grouped[key].push({ item: r.item, correct: r.correct, expectedGroup: r.expectedGroup })
+                            })
+                            return (
+                              <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={4}>
+                                {Object.entries(grouped).map(([grp, items]) => (
+                                  <Box key={`sum-gs-grp-${grp}`} p={3} borderWidth="1px" borderRadius="md">
+                                    <Text fontWeight="semibold" mb={2}>{grp}</Text>
+                                    <HStack flexWrap="wrap" gap={2}>
+                                      {items.length === 0 && (
+                                        <Text fontSize="sm" color="gray.500">(sin elementos)</Text>
+                                      )}
+                                      {items.map((it, iidx) => (
+                                        <Box key={`sum-gs-item-${grp}-${iidx}`} px={2} py={1} borderWidth="1px" borderRadius="md" borderColor={it.correct ? 'green.300' : 'red.300'} bg={it.correct ? 'green.50' : 'red.50'}>
+                                          <Text fontSize="sm">{it.item}</Text>
+                                          {!it.correct && (
+                                            <Text fontSize="xs" color="red.600">Correcto: {it.expectedGroup}</Text>
+                                          )}
+                                        </Box>
+                                      ))}
+                                    </HStack>
+                                  </Box>
+                                ))}
+                              </SimpleGrid>
+                            )
+                          })()}
+                        </VStack>
+                      )}
                       <VStack align="stretch" spacing={2}>
                         <Text fontWeight="semibold">Emparejamientos (líneas)</Text>
                         {linesResults.map((r, idx) => (
@@ -1182,6 +1590,22 @@ export default function Dashboard() {
                           })}
                         </VStack>
                       )}
+                      {anagramResults.length > 0 && (
+                        <VStack align="stretch" spacing={2}>
+                          <Text fontWeight="semibold">Anagrama</Text>
+                          {anagramResults.map((a, idx) => (
+                            <Box key={`sum-an-${idx}`} p={2} borderWidth="1px" borderRadius="md" borderColor={a.correct ? 'green.300' : 'red.300'} bg={a.correct ? 'green.50' : 'red.50'}>
+                              <Text fontSize="sm">Tu respuesta: {a.userAnswer || 'Sin respuesta'}</Text>
+                              {!a.correct && (
+                                <Text fontSize="xs" color="red.600">Correcta: {a.answer}</Text>
+                              )}
+                              {a.clue && (
+                                <Text fontSize="xs" color="gray.600">Pista: {a.clue}</Text>
+                              )}
+                            </Box>
+                          ))}
+                        </VStack>
+                      )}
                       <HStack>
                         <Button colorScheme="blue" onClick={async () => { 
                           await finalizeSession(); 
@@ -1200,7 +1624,7 @@ export default function Dashboard() {
                           setImagesResults([]); 
                           setActiveSection('recursos') 
                         }}>Salir</Button>
-                        <Button variant="outline" onClick={async () => {
+                        <Button variant="outline" isLoading={startingNewAttempt} onClick={async () => {
                           // Reiniciar completamente desde cero forzando nueva sesión y nuevo intento
                           const res = resources.find(r => r.id === playingResourceId)
                           if (res) {

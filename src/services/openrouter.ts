@@ -1,4 +1,4 @@
-import type { ResourceFormData, GeneratedResource, MatchUpContent, StudyElement, StudyCoursePresentationContent, StudyAccordionNotesContent, StudyTimelineContent } from './types'
+import type { ResourceFormData, GeneratedResource, MatchUpContent, StudyElement, StudyCoursePresentationContent, StudyAccordionNotesContent, StudyTimelineContent, QuizContent, GroupSortContent, AnagramContent, OpenTheBoxContent, GameElementBundle, FindTheMatchContent } from './types'
 import { cacheImageToSupabase, buildStorageKey, buildUserScopedStorageKey } from './imageCache'
 import { findContextualImageUrl } from './imageSearch'
 import { decideMatchUpUsage } from '../config/elementUsage.local'
@@ -14,6 +14,11 @@ const buildIntegratedPrompt = (formData: ResourceFormData, userAge: number): str
   return `Genera un SOLO JSON válido que incluya:
 1) Una línea de tiempo vertical con eventos ordenados de MENOR a MAYOR fecha.
 2) Actividades Match up (líneas e imágenes) BASADAS en esa misma información.
+3) Un Cuestionario (Quiz) de EXACTAMENTE 6 preguntas de opción múltiple sobre el mismo tema.
+4) Una actividad de Ordenar por grupo (Group Sort) con 2 a 4 grupos y hasta 12 ítems (sin mínimo).
+5) Una actividad de Anagrama (Anagram) con 3 a 6 ítems.
+6) Una actividad de Abrecajas (Open the Box) con EXACTAMENTE 6 cajas.
+7) Una actividad "Cada oveja con su pareja" (Find the Match) con EXACTAMENTE 6 pares concepto-afirmación.
 
 Formato JSON EXACTO (sin texto extra):
 {
@@ -28,6 +33,61 @@ Formato JSON EXACTO (sin texto extra):
     "linesMode": { "pairs": [ { "left": "...", "right": "..." } ] },
     "imagesMode": { "items": [ { "term": "...", "imageDescription": "FOTOGRAFÍA REAL ..." } ] }
   },
+  "findTheMatch": {
+    "templateType": "find_the_match",
+    "title": "<título descriptivo>",
+    "instructions": "<instrucciones breves: leer concepto, presionar afirmación correcta>",
+    "subject": "${subject}",
+    "topic": "${topic}",
+    "difficulty": "Básico|Intermedio|Avanzado",
+    "pairs": [ { "concept": "...", "affirmation": "..." } ]
+  },
+  "openTheBox": {
+    "templateType": "open_the_box",
+    "title": "<título descriptivo de la actividad>",
+    "instructions": "<instrucciones breves para abrir cajas y responder>",
+    "subject": "${subject}",
+    "topic": "${topic}",
+    "difficulty": "Básico|Intermedio|Avanzado",
+    "items": [
+      { "question": "...", "options": ["...","...","...","..."], "correctIndex": 0, "explanation": "..." }
+    ]
+  },
+  "anagram": {
+    "templateType": "anagram",
+    "title": "<título descriptivo de la actividad>",
+    "instructions": "<instrucciones para resolver anagramas>",
+    "subject": "${subject}",
+    "topic": "${topic}",
+    "difficulty": "Básico|Intermedio|Avanzado",
+    "items": [
+      { "clue": "<pista opcional>", "answer": "<palabra o frase>", "scrambled": "<letras desordenadas>" }
+    ]
+  },
+  "quiz": {
+    "templateType": "quiz",
+    "title": "<título descriptivo del quiz>",
+    "instructions": "<instrucciones breves para el quiz>",
+    "subject": "${subject}",
+    "topic": "${topic}",
+    "difficulty": "Básico|Intermedio|Avanzado",
+    "questions": [
+      { "prompt": "...", "options": ["...","...","...","..."], "correctIndex": 0, "explanation": "..." }
+    ]
+  },
+  "groupSort": {
+    "templateType": "group_sort",
+    "title": "<título descriptivo de la actividad>",
+    "instructions": "<instrucciones para ordenar por grupo>",
+    "subject": "${subject}",
+    "topic": "${topic}",
+    "difficulty": "Básico|Intermedio|Avanzado",
+    "groups": [
+      { "name": "<nombre del grupo>", "items": ["...","..."] }
+    ],
+    "umbrellaWord": "<palabra que abarca varios cuadros>",
+    "umbrellaCoversItems": ["<ítem>", "<ítem>"]
+  },
   "timeline": {
     "events": [
       { "title": "<título del evento>", "description": "<descripción extensa y relevante>", "date": "<YYYY-MM-DD o YYYY>", "imageDescription": "<describir FOTOGRAFÍA REAL>" }
@@ -36,10 +96,16 @@ Formato JSON EXACTO (sin texto extra):
 }
 
 Requisitos:
-- Línea de tiempo: genera tantos eventos como sean necesarios para entender el tema con claridad (sin mínimo ni máximo). Cada evento debe tener fecha visible si es posible y una descripción amplia (contexto, causa, consecuencia, relevancia). Ordena de menor a mayor.
+- Línea de tiempo: genera eventos sin mínimo obligatorio y con un MÁXIMO de 10. Cada evento debe tener fecha visible si es posible y una descripción amplia (contexto, causa, consecuencia, relevancia). Ordena de menor a mayor. Si el tema requiere menos eventos, incluye solo los necesarios; si requiere más, limita a los 10 más representativos.
 - MatchUp (líneas): 6 a 10 pares derivados de los eventos y subtemas relevantes del mismo ${subject}/${topic}. Las definiciones deben ser claras para ${userAge} años. Incluye al final: "Ejemplo: ..." (sin revelar directamente el término del lado izquierdo).
 - MatchUp (imágenes): EXACTAMENTE 4 ítems con descripciones para FOTOGRAFÍAS REALES, visualmente distintas; especifica el contexto si ayuda (p. ej., fondo blanco, mesa de madera, laboratorio).
-- Course Presentation: entre 6 y 12 diapositivas, con textos breves y apoyo visual relacionado al tema.
+- Quiz: Genera EXACTAMENTE 6 preguntas, cada una con EXACTAMENTE 4 opciones (1 correcta y 3 distractores plausibles). Varía la posición de la respuesta correcta. Incluye una justificación por pregunta con información precisa, completa y real (2–4 frases), suficiente para que el usuario entienda claramente el porqué de la respuesta.
+- Group Sort: Define de 2 a 4 grupos con nombres claros y HASTA 12 ítems totales (sin mínimo). Evita redundancias: NINGÚN ítem debe contener como subcadena el nombre del grupo ni sus sinónimos. Usa nombres de grupo conceptuales (p. ej., "Conflictos regionales" en lugar de "Guerras") para no revelar respuestas. Los ítems deben pertenecer inequívocamente a un grupo.
+ - Group Sort: Define de 2 a 4 grupos con nombres claros y HASTA 12 ítems totales (sin mínimo). Evita redundancias: NINGÚN ítem debe contener como subcadena el nombre del grupo ni sus sinónimos. Usa nombres de grupo conceptuales (p. ej., "Conflictos regionales" en lugar de "Guerras") para no revelar respuestas. Los ítems deben pertenecer inequívocamente a un grupo.
+- Anagram: Genera de 3 a 6 ítems. Cada ítem debe tener "answer" (palabra o frase corta) y "scrambled" con EXACTAMENTE las mismas letras desordenadas (sin añadir ni quitar). Si el answer tiene espacios, el scrambled puede omitirlos. Evita respuestas triviales y ofrece pistas ("clue") solo si ayudan a contextualizar el tema.
+- Open the Box (Abrecajas): Genera EXACTAMENTE 6 cajas. Cada caja contiene una pregunta de opción múltiple con EXACTAMENTE 4 opciones (1 correcta y 3 distractores plausibles). Varía la posición de la respuesta correcta y evita que las cajas o su título revelen la respuesta. Incluye explicación educativa breve por pregunta.
+ - Find the Match (Cada oveja con su pareja): Genera EXACTAMENTE 6 pares. Cada par contiene {concept, affirmation}. Los conceptos deben ser del tema ${subject}/${topic} y las afirmaciones deben ser precisas y breves. Evita ambigüedades: cada concepto debe corresponder inequívocamente a UNA afirmación. Las afirmaciones no deben revelar la respuesta de forma trivial.
+ - Course Presentation: entre 6 y 12 diapositivas. Cada diapositiva debe contener una explicación más extensa, precisa y verificable (6–10 oraciones o puntos clave), basada en información real y actualizada. Al final de cada texto, incluye "Fuentes:" seguido de 1–3 URLs confiables (p. ej., artículos y páginas oficiales, Wikipedia/Wikimedia/Wikidata, organismos internacionales, universidades). Evita opinión; usa datos verificables. El apoyo visual debe ser pertinente al tema.
 - Adapta la dificultad al objetivo: ${learningGoal}.
 - Responde SOLO con el JSON (sin Markdown ni explicaciones).`
 }
@@ -173,12 +239,96 @@ export async function generateMatchUpResource(formData: ResourceFormData, opts?:
     }))
   }
 
+  // Construir bundle de elementos de juego priorizando respuesta API si existe
+  const apiBundle: any = parsedAny?.gameelement
+  let gameBundle: GameElementBundle = { matchUp: parsed }
+  try {
+    if (apiBundle && typeof apiBundle === 'object') {
+      if (apiBundle?.matchUp?.templateType === 'match_up') {
+        gameBundle.matchUp = apiBundle.matchUp
+      }
+      if (apiBundle?.quiz?.templateType === 'quiz') {
+        gameBundle.quiz = apiBundle.quiz
+      }
+      if (apiBundle?.groupSort?.templateType === 'group_sort') {
+        gameBundle.groupSort = apiBundle.groupSort
+      }
+      if (apiBundle?.anagram?.templateType === 'anagram') {
+        gameBundle.anagram = apiBundle.anagram
+      }
+      if (apiBundle?.openTheBox?.templateType === 'open_the_box') {
+        gameBundle.openTheBox = apiBundle.openTheBox
+      }
+      if (apiBundle?.findTheMatch?.templateType === 'find_the_match') {
+        gameBundle.findTheMatch = apiBundle.findTheMatch as FindTheMatchContent
+      }
+    }
+  } catch (e) {
+    console.warn('Bundle gameelement inválido u ausente, usando solo MatchUp procesado:', e)
+  }
+
   const generated: GeneratedResource = {
     title: parsed.title || `${formData.subject}: ${formData.topic}`,
     summary: `Actividad Match up (líneas e imágenes) sobre ${formData.topic} en ${formData.subject}`,
     difficulty: parsed.difficulty || 'Intermedio',
-    gameelement: parsed,
+    gameelement: gameBundle,
+    matchUp: gameBundle.matchUp,
     studyElements: []
+  }
+
+  // Adjuntar Quiz si existe en el JSON
+  try {
+    const quizBlock: any = (apiBundle?.quiz ?? parsedAny?.quiz)
+    if (quizBlock?.templateType === 'quiz' && Array.isArray(quizBlock.questions) && quizBlock.questions.length > 0) {
+      generated.quiz = quizBlock as QuizContent
+      generated.gameelement = { ...(generated.gameelement || {}), quiz: quizBlock as QuizContent }
+    }
+  } catch (e) {
+    console.warn('Quiz inválido u ausente en JSON:', e)
+  }
+
+  // Adjuntar Group Sort si existe en el JSON
+  try {
+    const gsBlock: any = (apiBundle?.groupSort ?? parsedAny?.groupSort)
+    if (gsBlock?.templateType === 'group_sort' && Array.isArray(gsBlock.groups) && gsBlock.groups.length > 0) {
+      generated.groupSort = gsBlock as GroupSortContent
+      generated.gameelement = { ...(generated.gameelement || {}), groupSort: gsBlock as GroupSortContent }
+    }
+  } catch (e) {
+    console.warn('GroupSort inválido u ausente en JSON:', e)
+  }
+
+  // Adjuntar Anagram si existe en el JSON
+  try {
+    const anBlock: any = (apiBundle?.anagram ?? parsedAny?.anagram)
+    if (anBlock?.templateType === 'anagram' && Array.isArray(anBlock.items) && anBlock.items.length > 0) {
+      generated.anagram = anBlock as AnagramContent
+      generated.gameelement = { ...(generated.gameelement || {}), anagram: anBlock as AnagramContent }
+    }
+  } catch (e) {
+    console.warn('Anagram inválido u ausente en JSON:', e)
+  }
+
+  // Adjuntar Open the Box si existe en el JSON
+  try {
+    const otbBlock: any = (apiBundle?.openTheBox ?? parsedAny?.openTheBox)
+    if (otbBlock?.templateType === 'open_the_box' && Array.isArray(otbBlock.items) && otbBlock.items.length > 0) {
+      generated.openTheBox = otbBlock as OpenTheBoxContent
+      generated.gameelement = { ...(generated.gameelement || {}), openTheBox: otbBlock as OpenTheBoxContent }
+    }
+  } catch (e) {
+    console.warn('OpenTheBox inválido u ausente en JSON:', e)
+  }
+
+  // Adjuntar Find the Match si existe en el JSON
+  try {
+    const ftmBlock: any = (apiBundle?.findTheMatch ?? parsedAny?.findTheMatch)
+    if (ftmBlock?.templateType === 'find_the_match' && Array.isArray(ftmBlock.pairs) && ftmBlock.pairs.length === 6) {
+      generated.findTheMatch = ftmBlock as FindTheMatchContent
+      generated.gameelement = { ...(generated.gameelement || {}), findTheMatch: ftmBlock as FindTheMatchContent }
+    }
+  } catch (e) {
+    console.warn('FindTheMatch inválido u ausente en JSON:', e)
   }
 
   // Construir elementos de estudio (máximo 2) antes de los MatchUps
@@ -216,11 +366,11 @@ export async function generateMatchUpResource(formData: ResourceFormData, opts?:
 
       if (decision.type === 'course_presentation') {
         const maxSlides = decision.maxUnits || 8
-        // Para evitar duplicación con Timeline, construir diapositivas a partir de pares (subtemas) si existen
-        const slidesSource = (parsed.linesMode.pairs && parsed.linesMode.pairs.length > 0)
-          ? parsed.linesMode.pairs
-          : integratedEvents
-        const slides = slidesSource.slice(0, maxSlides).map(p => ({ title: (p as any).left || (p as any).title, text: (p as any).right || (p as any).description }))
+        // Preferir eventos integrados (más descriptivos) como fuente de diapositivas; fallback a pares si no existen
+        const slidesSource = (integratedEvents && integratedEvents.length > 0)
+          ? integratedEvents
+          : (parsed.linesMode.pairs || [])
+        const slides = slidesSource.slice(0, maxSlides).map(p => ({ title: (p as any).title || (p as any).left, text: (p as any).description || (p as any).right }))
         cpTitles.splice(0, cpTitles.length, ...slides.map(s => (s.title || '').trim().toLowerCase()))
         const cp: StudyCoursePresentationContent = { backgroundImageUrl, slides }
         elements.push({ type: 'course_presentation', content: cp })
@@ -254,7 +404,7 @@ export async function generateMatchUpResource(formData: ResourceFormData, opts?:
         const ac: StudyAccordionNotesContent = { sections }
         elements.push({ type: 'accordion_notes', content: ac })
       } else if (decision.type === 'timeline') {
-        const maxEv = decision.maxUnits || 6
+        const maxEv = decision.maxUnits || 10
         const extractYearFromText = (txt?: string): string | undefined => {
           if (!txt) return undefined
           const m = txt.match(/\b(\d{4})\b/)

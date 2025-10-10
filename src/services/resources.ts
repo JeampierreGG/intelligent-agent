@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { GeneratedResource, StudyElement, StudyTimelineContent } from './types'
+import type { GeneratedResource, StudyElement, StudyTimelineContent, MatchUpPair, MatchUpImagesItem } from './types'
 import {
   saveEducationalResourceLocal,
   getUserResourcesLocal,
@@ -92,8 +92,9 @@ const persistGeneratedDetails = async (resourceRow: EducationalResource) => {
   const resourceId = resourceRow.id
   const content = resourceRow.content as GeneratedResource
 
-  // 1) Game Element (preferir "gameelement" y hacer fallback a gameElements/matchUp)
-  const gameEl = content.gameelement ?? content.gameElements ?? content.matchUp
+  // 1) Game Element (preferir bundle gameelement.matchUp y hacer fallback a gameElements/matchUp)
+  const gameBundle = (content.gameelement as any) || null
+  const gameEl = (gameBundle?.matchUp ?? content.matchUp ?? (content as any).gameElements) as any
   let matchupLinesId: string | null = null
   let matchupImagesId: string | null = null
   if (gameEl?.linesMode && gameEl.linesMode.pairs && gameEl.linesMode.pairs.length > 0) {
@@ -105,7 +106,7 @@ const persistGeneratedDetails = async (resourceRow: EducationalResource) => {
     if (mlErr) throw mlErr
     matchupLinesId = ml.id
 
-    const pairsRows = gameEl.linesMode.pairs.map((p, idx) => ({
+    const pairsRows = (gameEl.linesMode.pairs as MatchUpPair[]).map((p: MatchUpPair, idx: number) => ({
       matchup_lines_id: matchupLinesId,
       order_index: idx,
       left_text: p.left,
@@ -127,7 +128,7 @@ const persistGeneratedDetails = async (resourceRow: EducationalResource) => {
     if (miErr) throw miErr
     matchupImagesId = mi.id
 
-    const itemsRows = gameEl.imagesMode.items.map((it, idx) => ({
+    const itemsRows = (gameEl.imagesMode.items as MatchUpImagesItem[]).map((it: MatchUpImagesItem, idx: number) => ({
       matchup_images_id: matchupImagesId,
       order_index: idx,
       image_url: it.imageUrl ?? null,

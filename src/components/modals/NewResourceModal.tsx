@@ -138,10 +138,9 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
       console.log('✅ Recurso combinado guardado en Supabase:', { savedCombined })
 
       toast({
-        title: '¡Recurso creado!',
-        description: 'Se ha creado un recurso Match up con modos de líneas e imágenes. Las imágenes se han cacheado en Supabase para acelerar futuros usos.',
+        title: 'Recurso creado de manera exitosa.',
         status: 'success',
-        duration: 6000,
+        duration: 4000,
         isClosable: true
       })
 

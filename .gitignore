@@ -24,6 +24,28 @@ ejemplo/
 
 # No subir documentación local
 docs/
+documentacion/
+documentación/
+
+# Entornos y secretos
+.env
+.env.*
+!.env.example
+
+# Dependencias y build
+node_modules/
+dist/
+coverage/
+*.log
+
+# Configuración de IDE/Editor
+.vscode/
+.idea/
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+docs/
 
 # Configuración local no versionada
 src/config/elementUsage.local.ts

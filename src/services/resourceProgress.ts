@@ -1,4 +1,15 @@
-export type ResourceStage = 'study' | 'lines' | 'images' | 'summary'
+export type ResourceStage =
+  | 'study'
+  | 'quiz'
+  | 'quiz_summary'
+  | 'lines'
+  | 'lines_summary'
+  | 'images'
+  | 'group_sort'
+  | 'group_sort_summary'
+  | 'open_box'
+  | 'anagram'
+  | 'summary'
 
 export interface ResourceProgressData {
   stage: ResourceStage
