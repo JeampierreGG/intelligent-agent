@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { Box, Heading, Text, Card, CardBody, VStack, HStack, Button, Badge } from '@chakra-ui/react'
 import type { QuizContent } from '../../services/types'
 
