@@ -123,7 +123,11 @@ export async function generateMatchUpResource(formData: ResourceFormData, opts?:
   const userAge = typeof birthYear === 'number' ? Math.max(0, currentYear - birthYear) : 0
 
   const prompt = buildIntegratedPrompt(formData, userAge)
-
+//tngtech/deepseek-r1t2-chimera:free
+//moonshotai/kimi-k2:free
+//openai/gpt-4o-mini
+//google/gemini-2.0-flash-exp:free
+//qwen/qwen3-coder:free
   const body = {
     model: 'openai/gpt-4o-mini',
     messages: [
@@ -372,7 +376,8 @@ export async function generateMatchUpResource(formData: ResourceFormData, opts?:
           : (parsed.linesMode.pairs || [])
         const slides = slidesSource.slice(0, maxSlides).map(p => ({ title: (p as any).title || (p as any).left, text: (p as any).description || (p as any).right }))
         cpTitles.splice(0, cpTitles.length, ...slides.map(s => (s.title || '').trim().toLowerCase()))
-        const cp: StudyCoursePresentationContent = { backgroundImageUrl, slides }
+      // Ya no usamos imagen de fondo en Course Presentation
+      const cp: StudyCoursePresentationContent = { slides }
         elements.push({ type: 'course_presentation', content: cp })
       } else if (decision.type === 'accordion_notes') {
         const maxSecs = decision.maxUnits || 6

@@ -1,17 +1,18 @@
 import React, { useMemo, useState } from 'react'
-import { Box, Button, HStack, Input, Text, VStack, Tag, TagLabel } from '@chakra-ui/react'
+import { Box, Button, HStack, Input, Text, VStack, Tag, TagLabel, Spacer } from '@chakra-ui/react'
 import type { AnagramContent } from '../../services/types'
 
 export interface AnagramProps {
   content: AnagramContent
   onComplete?: (details: Array<{ answer: string; userAnswer: string; correct: boolean; clue?: string }>) => void
+  renderContinueButton?: React.ReactNode
 }
 
 function normalize(s: string) {
   return (s || '').toLowerCase().trim()
 }
 
-const Anagram: React.FC<AnagramProps> = ({ content, onComplete }) => {
+const Anagram: React.FC<AnagramProps> = ({ content, onComplete, renderContinueButton }) => {
   const items = useMemo(() => content.items || [], [content.items])
   const [inputs, setInputs] = useState<string[]>(items.map(() => ''))
   const [checked, setChecked] = useState<boolean[]>(items.map(() => false))
@@ -75,8 +76,10 @@ const Anagram: React.FC<AnagramProps> = ({ content, onComplete }) => {
           )
         })}
       </VStack>
-      <HStack>
-        <Button colorScheme="blue" onClick={handleFinish} isDisabled={finished}>Finalizar anagrama</Button>
+      <HStack w="100%" align="center">
+        <Button colorScheme="red" variant="outline" onClick={handleFinish} isDisabled={finished}>Omitir y perder puntos</Button>
+        <Spacer />
+        {renderContinueButton}
       </HStack>
     </VStack>
   )

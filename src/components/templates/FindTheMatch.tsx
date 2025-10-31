@@ -5,7 +5,7 @@ import type { FindTheMatchContent, FindTheMatchPair } from '../../services/types
 
 export interface FindTheMatchProps {
   content: FindTheMatchContent
-  onComplete?: (details: Array<{ concept: string; chosen?: string; expected: string; correct: boolean }>) => void
+  onComplete?: (details: Array<{ concept: string; chosen?: string; expected: string; correct: boolean }>, omitted?: boolean) => void
 }
 
 // Utilidad para aleatorizar arreglos
@@ -92,7 +92,7 @@ const FindTheMatch: React.FC<FindTheMatchProps> = ({ content, onComplete }) => {
         // Finalización si ya no quedan elementos
         if (newQueue.length === 0) {
           const finalDetails = [...results, detail]
-          onComplete?.(finalDetails)
+          onComplete?.(finalDetails, false)
         }
       } else {
         // mover concepto actual al final de la cola
@@ -177,12 +177,29 @@ const FindTheMatch: React.FC<FindTheMatchProps> = ({ content, onComplete }) => {
               <Text fontSize="sm" color="gray.600">Restantes: {queue.length}</Text>
               <Text fontSize="sm" color="gray.600">Aciertos: {results.filter(r => r.correct).length}</Text>
             </HStack>
+            <HStack justify="flex-start">
+              <Button
+                colorScheme="red"
+                variant="outline"
+                onClick={() => {
+                  // Omitir el elemento: los restantes cuentan como incorrectos
+                  const remainingIncorrect = queue.map(p => ({ concept: p.concept, expected: p.affirmation, correct: false }))
+                  const finalDetails = [...results, ...remainingIncorrect]
+                  // Evitar continuar animaciones
+                  if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null }
+                  setQueue([])
+                  setAffirmations([])
+                  setCurrentIdx(0)
+                  setFeedback({ type: 'none', affirmation: null })
+                  onComplete?.(finalDetails as any, true)
+                }}
+              >Omitir y perder puntos</Button>
+            </HStack>
           </VStack>
         </Box>
       ) : (
-        <Box p={4} borderWidth="1px" borderRadius="md" bg={bg}>
-          <Text fontSize="md">¡Completado! Todas las parejas encontradas.</Text>
-        </Box>
+        // No mostrar página de completado aquí; el contenedor padre avanzará de etapa automáticamente
+        <></>
       )}
     </VStack>
   )

@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { GeneratedResource, StudyElement, StudyTimelineContent, MatchUpPair, MatchUpImagesItem } from './types'
+import type { GeneratedResource, StudyElement, StudyTimelineContent, MatchUpPair } from './types'
 import {
   saveEducationalResourceLocal,
   getUserResourcesLocal,
@@ -96,7 +96,6 @@ const persistGeneratedDetails = async (resourceRow: EducationalResource) => {
   const gameBundle = (content.gameelement as any) || null
   const gameEl = (gameBundle?.matchUp ?? content.matchUp ?? (content as any).gameElements) as any
   let matchupLinesId: string | null = null
-  let matchupImagesId: string | null = null
   if (gameEl?.linesMode && gameEl.linesMode.pairs && gameEl.linesMode.pairs.length > 0) {
     const { data: ml, error: mlErr } = await supabase
       .from('educational_matchup_lines')
@@ -118,27 +117,8 @@ const persistGeneratedDetails = async (resourceRow: EducationalResource) => {
     if (lpErr) throw lpErr
   }
 
-  // 2) MatchUp Images
-  if (gameEl?.imagesMode && gameEl.imagesMode.items && gameEl.imagesMode.items.length > 0) {
-    const { data: mi, error: miErr } = await supabase
-      .from('educational_matchup_images')
-      .insert({ resource_id: resourceId, title: gameEl.title })
-      .select('id')
-      .single()
-    if (miErr) throw miErr
-    matchupImagesId = mi.id
-
-    const itemsRows = (gameEl.imagesMode.items as MatchUpImagesItem[]).map((it: MatchUpImagesItem, idx: number) => ({
-      matchup_images_id: matchupImagesId,
-      order_index: idx,
-      image_url: it.imageUrl ?? null,
-      label: it.term,
-    }))
-    const { error: iiErr } = await supabase
-      .from('educational_matchup_image_items')
-      .insert(itemsRows)
-    if (iiErr) throw iiErr
-  }
+  // 2) MatchUp Images desactivado: no persistir en BD aunque exista en el JSON
+  // (solicitud del usuario de desactivar "matchuoimages" sin eliminarlo)
 
   // 3) Study Elements (máximo dos, en orden)
   const studyElements = (content.studyElements || []) as StudyElement[]
@@ -189,7 +169,8 @@ const persistGeneratedDetails = async (resourceRow: EducationalResource) => {
       const cp = el.content
       const { data: cpRow, error: cpErr } = await supabase
         .from('educational_course_presentations')
-        .insert({ resource_id: resourceId, background_image_url: cp.backgroundImageUrl ?? null })
+        // Forzar background_image_url a null: ya no se usa imagen de fondo
+        .insert({ resource_id: resourceId, background_image_url: null })
         .select('id')
         .single()
       if (cpErr) throw cpErr
@@ -287,6 +268,41 @@ export const getUserResources = async (userId: string) => {
   // Fallback a localStorage
   console.log('📦 Usando localStorage como fallback para obtener recursos')
   return await getUserResourcesLocal(userId)
+}
+
+/**
+ * Obtiene recursos del usuario paginados (12 por página por defecto) y el conteo total
+ */
+export const getUserResourcesPaginated = async (userId: string, page: number, pageSize: number) => {
+  const supabaseAvailable = await isSupabaseAvailable()
+  const from = Math.max(0, (page - 1) * pageSize)
+  const to = from + pageSize - 1
+
+  if (supabaseAvailable) {
+    try {
+      const { data, count, error } = await supabase
+        .from('educational_resources')
+        .select('*', { count: 'exact' })
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .range(from, to)
+
+      if (error) {
+        console.error('Error obteniendo recursos paginados en Supabase:', error)
+        throw error
+      }
+
+      return { data: data || [], count: count || 0, error: null }
+    } catch (error) {
+      console.error('❌ Error en Supabase (paginado), intentando localStorage:', error)
+    }
+  }
+
+  // Fallback a localStorage (paginación en memoria)
+  const { data } = await getUserResourcesLocal(userId)
+  const total = data?.length ?? 0
+  const sliced = (data || []).slice(from, to + 1)
+  return { data: sliced, count: total, error: null }
 }
 
 /**

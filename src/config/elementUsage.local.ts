@@ -28,7 +28,8 @@ export function decideMatchUpUsage(formData: ResourceFormData): MatchUpUsage {
   const wikiPriority = subject.includes('hist') || topic.includes('hist')
 
   return {
-    useImages: true,
+    // Desactivar completamente el modo de imágenes del MatchUp según solicitud
+    useImages: false,
     maxImages: 4, // el flujo downstream espera exactamente 4 si hay imágenes
     pollinationsQuality: 'medium',
     useWikimediaPriority: wikiPriority,

@@ -1,14 +1,15 @@
 import React, { useMemo, useState } from 'react'
-import { Box, Button, HStack, Text, VStack, SimpleGrid, RadioGroup, Radio, Stack, Image } from '@chakra-ui/react'
+import { Box, Button, HStack, Text, VStack, SimpleGrid, RadioGroup, Radio, Stack, Image, Spacer } from '@chakra-ui/react'
 import type { OpenTheBoxContent } from '../../services/types'
 import logoIA from '../../assets/Logo-IA.png'
 
 export interface OpenTheBoxProps {
   content: OpenTheBoxContent
   onComplete?: (details: Array<{ question: string; options: string[]; chosenIndex: number; correctIndex: number; chosenText: string; correctText: string; correct: boolean; explanation?: string }>) => void
+  renderContinueButton?: React.ReactNode
 }
 
-const OpenTheBox: React.FC<OpenTheBoxProps> = ({ content, onComplete }) => {
+const OpenTheBox: React.FC<OpenTheBoxProps> = ({ content, onComplete, renderContinueButton }) => {
   const items = useMemo(() => content.items || [], [content.items])
   const [opened, setOpened] = useState<boolean[]>(items.map(() => false))
   const [selected, setSelected] = useState<Array<number | null>>(items.map(() => null))
@@ -40,6 +41,8 @@ const OpenTheBox: React.FC<OpenTheBoxProps> = ({ content, onComplete }) => {
       return { question: it.question, options: it.options, chosenIndex, correctIndex, chosenText, correctText, correct, explanation: it.explanation }
     })
     // Marcar todas las cajas como revisadas y reflejar resultados, dejando en blanco las no respondidas
+    // Además, abrir todas las cajas para que el usuario vea las preguntas y respuestas correctas
+    setOpened(items.map(() => true))
     setChecked(items.map(() => true))
     setResults(details.map(d => d.correct))
     setFinished(true)
@@ -119,8 +122,10 @@ const OpenTheBox: React.FC<OpenTheBoxProps> = ({ content, onComplete }) => {
           )
         })}
       </SimpleGrid>
-      <HStack>
-        <Button colorScheme="blue" onClick={finish} isDisabled={finished}>Finalizar abrecajas</Button>
+      <HStack w="100%" align="center">
+        <Button colorScheme="red" variant="outline" onClick={finish} isDisabled={finished}>Omitir y perder puntos</Button>
+        <Spacer />
+        {renderContinueButton}
       </HStack>
     </VStack>
   )

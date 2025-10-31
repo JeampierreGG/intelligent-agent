@@ -7,6 +7,8 @@ export type ResourceStage =
   | 'images'
   | 'group_sort'
   | 'group_sort_summary'
+  | 'find_the_match'
+  | 'find_the_match_summary'
   | 'open_box'
   | 'anagram'
   | 'summary'
@@ -17,6 +19,13 @@ export interface ResourceProgressData {
   studyItemCompleted?: boolean
   linesCompleted?: boolean
   imagesCompleted?: boolean
+  // Flags de confirmación al presionar "Continuar" para contabilizar puntuación
+  quizConfirmed?: boolean
+  linesConfirmed?: boolean
+  groupSortConfirmed?: boolean
+  findTheMatchConfirmed?: boolean
+  openBoxConfirmed?: boolean
+  anagramConfirmed?: boolean
   updatedAt?: string
 }
 

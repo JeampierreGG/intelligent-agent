@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
+import ReviewResource from './pages/ReviewResource'
 import { DashboardProtectedRoute } from './components/DashboardProtectedRoute'
 
 // Componente para rutas públicas (solo accesibles si no está logueado)
@@ -48,6 +49,14 @@ function App() {
               element={
                 <DashboardProtectedRoute>
                   <Dashboard />
+                </DashboardProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/review/:resourceId" 
+              element={
+                <DashboardProtectedRoute>
+                  <ReviewResource />
                 </DashboardProtectedRoute>
               } 
             />

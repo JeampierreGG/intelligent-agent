@@ -37,14 +37,11 @@ const CoursePresentation: React.FC<CoursePresentationProps> = ({ title, content,
       borderRadius="lg"
       overflow="hidden"
       borderWidth="1px"
-      minH="300px"
-      backgroundImage={content.backgroundImageUrl ? `url(${content.backgroundImageUrl})` : undefined}
-      backgroundSize="cover"
-      backgroundPosition="center"
+      height="300px" /* 60% más alto que 300px y de tamaño fijo */
+      bg="gray.50"
     >
-      <Box bg="rgba(0,0,0,0.45)" position="absolute" inset={0} />
       <VStack spacing={4} align="stretch" position="relative" zIndex={1} p={4}>
-        <Heading size="md" color="white">{title}</Heading>
+        <Heading size="md" color="gray.800">{title}</Heading>
         <SlideFade in key={idx} offsetX={direction === 'next' ? 32 : -32} offsetY={0}>
           <Box bg="rgba(255,255,255,0.9)" borderRadius="md" p={4} boxShadow="md">
             <Heading size="sm" mb={2}>{current.title}</Heading>
@@ -52,8 +49,8 @@ const CoursePresentation: React.FC<CoursePresentationProps> = ({ title, content,
           </Box>
         </SlideFade>
         <HStack justify="space-between">
-          <Button onClick={goPrev} isDisabled={idx === 0} variant="outline" colorScheme="whiteAlpha">Anterior</Button>
-          <Text color="white">{idx + 1} / {total}</Text>
+          <Button onClick={goPrev} isDisabled={idx === 0} variant="outline" colorScheme="blue">Anterior</Button>
+          <Text color="gray.700">{idx + 1} / {total}</Text>
           {idx < total - 1 ? (
             <Button onClick={goNext} colorScheme="blue">Siguiente</Button>
           ) : (

@@ -92,3 +92,26 @@ export async function addAccumulatedSeconds(sessionId: string, additionalSeconds
   }
   return true
 }
+
+// Obtiene el total de segundos acumulados por el usuario en un recurso (sumando todas las sesiones)
+export async function getTotalAccumulatedSecondsForResource(userId: string, resourceId: string): Promise<number> {
+  try {
+    const { data, error } = await supabase
+      .from('educational_resource_sessions')
+      .select('accumulated_seconds, ended_at')
+      .eq('user_id', userId)
+      .eq('resource_id', resourceId)
+    if (error) {
+      console.error('Error sumando accumulated_seconds:', error)
+      return 0
+    }
+    const total = (data || []).reduce((sum: number, row: any) => {
+      const acc = (row?.accumulated_seconds ?? 0) as number
+      return sum + (acc || 0)
+    }, 0)
+    return total
+  } catch (e) {
+    console.error('Error obteniendo total de segundos acumulados:', e)
+    return 0
+  }
+}
