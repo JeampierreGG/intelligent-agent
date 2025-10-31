@@ -90,7 +90,7 @@ export async function addAccumulatedSeconds(sessionId: string, additionalSeconds
     console.error('Error actualizando accumulated_seconds:', updErr)
     return false
   }
-  return true
+  return true 
 }
 
 // Obtiene el total de segundos acumulados por el usuario en un recurso (sumando todas las sesiones)
@@ -102,7 +102,7 @@ export async function getTotalAccumulatedSecondsForResource(userId: string, reso
       .eq('user_id', userId)
       .eq('resource_id', resourceId)
     if (error) {
-      console.error('Error sumando accumulated_seconds:', error)
+      console.error('Hay un error sumando accumulated_seconds:', error)
       return 0
     }
     const total = (data || []).reduce((sum: number, row: any) => {
