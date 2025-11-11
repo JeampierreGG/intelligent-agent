@@ -133,7 +133,7 @@ export interface FindTheMatchContent {
 }
 
 // Elementos de estudio previos a gamificación (máx. 2)
-export type StudyElementType = 'course_presentation' | 'accordion_notes' | 'timeline'
+export type StudyElementType = 'course_presentation' | 'accordion_notes' | 'timeline' | 'mnemonic_creator'
 
 export interface StudyCoursePresentationContent {
   backgroundImageUrl?: string; // Imagen de fondo única (Wikimedia preferentemente)
@@ -163,10 +163,26 @@ export interface StudyTimelineContent {
   topicImageUrl?: string;
 }
 
+// Nuevo: Nemotecnia (creación de mnemotecnia por el alumno con opción de generación automática)
+export interface StudyMnemonicItem {
+  prompt: string;   // concepto/pregunta
+  answer: string;   // definición/respuesta
+}
+
+export interface StudyMnemonicContent {
+  title?: string;
+  instructions?: string;
+  exampleText?: string; // breve ejemplo de qué es una mnemotecnia
+  items: StudyMnemonicItem[]; // idealmente 4 items
+  subject?: string;
+  topic?: string;
+}
+
 export type StudyElement =
   | { type: 'course_presentation'; content: StudyCoursePresentationContent }
   | { type: 'accordion_notes'; content: StudyAccordionNotesContent }
   | { type: 'timeline'; content: StudyTimelineContent }
+  | { type: 'mnemonic_creator'; content: StudyMnemonicContent }
 
 // Nuevo: paquete de elementos de juego para logs y consistencia
 export interface GameElementBundle {
@@ -194,4 +210,14 @@ export interface GeneratedResource {
   openTheBox?: OpenTheBoxContent;
   findTheMatch?: FindTheMatchContent;
   studyElements?: StudyElement[]; // Plantillas de estudio para mostrar en el Dashboard antes de los MatchUps
+}
+
+// Nuevo: Debates (elemento final, sin puntaje)
+export interface DebateContent {
+  templateType: 'debate'
+  title: string
+  subject: string
+  topic: string
+  instructions?: string
+  initialQuestion?: string
 }

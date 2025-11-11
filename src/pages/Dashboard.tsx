@@ -60,7 +60,10 @@ import CoursePresentation from '../components/templates/CoursePresentation'
 import AccordionNotes from '../components/templates/AccordionNotes'
 import Timeline from '../components/templates/Timeline'
 import FindTheMatch from '../components/templates/FindTheMatch'
-import type { MatchUpContent, StudyElement, QuizContent, GroupSortContent, AnagramContent, OpenTheBoxContent, FindTheMatchContent } from '../services/types'
+import Nemotecnia from '../components/templates/Nemotecnia'
+import MnemonicPractice from '../components/templates/MnemonicPractice'
+import Debate from '../components/templates/Debate'
+import type { MatchUpContent, StudyElement, QuizContent, GroupSortContent, AnagramContent, OpenTheBoxContent, FindTheMatchContent, MatchUpPair, FindTheMatchPair, DebateContent } from '../services/types'
 import logoImage from '../assets/Logo-IA.png'
 
 import { getUserResourcesPaginated, type EducationalResource } from '../services/resources'
@@ -68,6 +71,8 @@ import { supabase } from '../services/supabase'
 import { getResourceProgress, saveResourceProgress, clearResourceProgress } from '../services/resourceProgress'
 import { clearTimelineProgressForResource } from '../services/timelineProgress'
 import { startNewAttempt, completeAttempt, saveAttemptFinalScore, getAttemptCount } from '../services/attempts'
+import { persistMnemonic } from '../services/mnemonics.ts'
+import { getGlobalRanking, type GlobalRankingEntry } from '../services/ranking'
 // Eliminado soporte H5P
 
 export default function Dashboard() {
@@ -76,6 +81,10 @@ export default function Dashboard() {
   const location = useLocation() as any
   const toast = useToast()
   const [activeSection, setActiveSection] = useState('dashboard')
+  // Ranking global
+  const [ranking, setRanking] = useState<GlobalRankingEntry[]>([])
+  const [loadingRanking, setLoadingRanking] = useState<boolean>(false)
+  const [rankingError, setRankingError] = useState<string | null>(null)
   const { isOpen, onOpen, onClose } = useDisclosure()
 
   const [resources, setResources] = useState<EducationalResource[]>([])
@@ -101,7 +110,7 @@ const [playingStudyElements, setPlayingStudyElements] = useState<StudyElement[] 
   const [resourceProgressMap, setResourceProgressMap] = useState<Record<string, number>>({})
   const [resourceScoreMap, setResourceScoreMap] = useState<Record<string, number>>({})
   const [studyIndex, setStudyIndex] = useState<number>(0)
-const [matchUpStage, setMatchUpStage] = useState<'study' | 'quiz' | 'quiz_summary' | 'lines' | 'lines_summary' | 'group_sort' | 'group_sort_summary' | 'find_the_match' | 'find_the_match_summary' | 'open_box' | 'anagram' | 'summary' | null>(null)
+const [matchUpStage, setMatchUpStage] = useState<'study' | 'mnemonic_practice' | 'quiz' | 'quiz_summary' | 'lines' | 'lines_summary' | 'group_sort' | 'group_sort_summary' | 'find_the_match' | 'find_the_match_summary' | 'open_box' | 'anagram' | 'debate' | 'summary' | null>(null)
   const [linesCompleted, setLinesCompleted] = useState<boolean>(false)
   // Imágenes desactivadas
   const [quizCompleted, setQuizCompleted] = useState<boolean>(false)
@@ -117,7 +126,14 @@ const [matchUpStage, setMatchUpStage] = useState<'study' | 'quiz' | 'quiz_summar
   const [playingAnagram, setPlayingAnagram] = useState<AnagramContent | null>(null)
   const [playingOpenBox, setPlayingOpenBox] = useState<OpenTheBoxContent | null>(null)
 const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchContent | null>(null)
+  const [playingDebate, setPlayingDebate] = useState<DebateContent | null>(null)
   const [anagramCompleted, setAnagramCompleted] = useState<boolean>(false)
+  const [mnemonicPracticeCompleted, setMnemonicPracticeCompleted] = useState<boolean>(false)
+  // const [mnemonicPracticeResults, setMnemonicPracticeResults] = useState<Array<{ prompt: string; answer: string; userAnswer: string; correct: boolean }>>([])
+  // Estado para mnemotecnia
+  const [mnemonicAuto, setMnemonicAuto] = useState<string>('')
+  const [mnemonicDraft, setMnemonicDraft] = useState<string>('')
+  const [isSavingMnemonic, setIsSavingMnemonic] = useState<boolean>(false)
   const [openBoxCompleted, setOpenBoxCompleted] = useState<boolean>(false)
   // const [findMatchCompleted, setFindMatchCompleted] = useState<boolean>(false)
   const [anagramResults, setAnagramResults] = useState<Array<{ answer: string; userAnswer: string; correct: boolean; clue?: string }>>([])
@@ -459,6 +475,26 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
     loadUserResources()
   }, [user?.id, currentPage])
 
+  // Cargar ranking global cuando se selecciona la sección "ranking"
+  useEffect(() => {
+    const loadRanking = async () => {
+      if (activeSection !== 'ranking') return
+      setLoadingRanking(true)
+      setRankingError(null)
+      try {
+        const list = await getGlobalRanking(50)
+        setRanking(list)
+      } catch (e) {
+        console.error('Error cargando ranking global:', e)
+        setRankingError('No se pudo cargar el ranking global')
+      } finally {
+        setLoadingRanking(false)
+      }
+    }
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    loadRanking()
+  }, [activeSection])
+
   // Guardar puntaje final cuando se llega al resumen
   useEffect(() => {
     const persistFinalScore = async () => {
@@ -724,14 +760,34 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
       }
       if (matchUp && matchUp.templateType === 'match_up' && matchUp.linesMode?.pairs?.length > 0) {
         setPlayingMatchUp(matchUp)
-        const preparedStudy = studyEls.slice(0, 2)
+        // Preparar elementos de estudio (máx. 2) y añadir Nemotecnia si hay material
+        const preparedStudyBase = studyEls.slice(0, 2)
+        const mnemonicSourcePairs = (findTheMatch?.pairs && findTheMatch.pairs.length >= 4)
+          ? findTheMatch.pairs.slice(0, 4).map((p: FindTheMatchPair) => ({ prompt: p.concept, answer: p.affirmation }))
+          : ((matchUp.linesMode?.pairs?.slice(0, 4) as MatchUpPair[]) || []).map((p: MatchUpPair) => ({ prompt: p.left, answer: p.right }))
+        const preparedStudy = [...preparedStudyBase]
+        if (mnemonicSourcePairs.length === 4) {
+          preparedStudy.push({
+            type: 'mnemonic_creator',
+            content: {
+              title: 'Mnemotecnia',
+              items: mnemonicSourcePairs,
+              topic: resource.content?.gameelement?.matchUp?.topic || (resource.content as any)?.topic || undefined,
+              subject: resource.content?.gameelement?.matchUp?.subject || (resource.content as any)?.subject || undefined,
+              exampleText: 'Para recordar una secuencia, puedes crear una frase con las iniciales de cada palabra clave.'
+            }
+          })
+        }
         setPlayingStudyElements(preparedStudy)
         setPlayingQuiz(quiz || null)
         setPlayingGroupSort(groupSort || null)
         setPlayingResourceId(resource.id)
         setStudyIndex(0)
         setPlayingTitle(resource.title)
-        setMatchUpStage(studyEls.length > 0 ? 'study' : (quiz ? 'quiz' : 'lines'))
+        setMatchUpStage(preparedStudy.length > 0 ? 'study' : (quiz ? 'quiz' : 'lines'))
+        setMnemonicAuto('')
+        setMnemonicDraft('')
+        setIsSavingMnemonic(false)
         setLinesCompleted(false)
         setActiveSection('recursos') // mantener contexto de sección
         try { window.scrollTo({ top: 0, behavior: 'auto' }) } catch {}
@@ -744,6 +800,14 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
         setPlayingAnagram(anagram || null)
         setPlayingOpenBox(openTheBox || null)
         setPlayingFindTheMatch(findTheMatch || null)
+        // Preparar contenido para Debate final (sin puntaje)
+        setPlayingDebate({
+          templateType: 'debate',
+          title: resource.title,
+          subject: resource.content?.gameelement?.matchUp?.subject || (resource.content as any)?.subject || 'General',
+          topic: resource.content?.gameelement?.matchUp?.topic || (resource.content as any)?.topic || resource.title,
+          instructions: 'Debate: el sistema generará una pregunta con posturas a favor y en contra. Comparte tu opinión y continúa las rondas cuando lo desees.'
+        })
         setAnagramCompleted(false)
         setOpenBoxCompleted(false)
         setAnagramResults([])
@@ -1238,19 +1302,60 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
             <Box>
               <Text fontSize="2xl" fontWeight="bold">Ranking Global</Text>
               <Text color="gray.600">Compite con otros estudiantes</Text>
+              <Text color="gray.500" fontSize="sm">El "Total" corresponde a la suma de tus puntajes finales por recurso (último intento).</Text>
             </Box>
             
             <Card bg={cardBg} shadow="sm" borderWidth="1px" borderColor={borderColor}>
               <CardBody>
-                <VStack spacing={4} py={8}>
-                  <Icon as={FiTrendingUp} boxSize={12} color="gray.400" />
-                  <Text fontSize="lg" color="gray.600">
-                    Ranking próximamente disponible
-                  </Text>
-                  <Text color="gray.500" textAlign="center">
-                    Completa algunos recursos para aparecer en el ranking
-                  </Text>
-                </VStack>
+                {loadingRanking ? (
+                  <HStack justify="center" py={8}><Spinner /></HStack>
+                ) : rankingError ? (
+                  <VStack spacing={2} py={6}>
+                    <Text color="red.500">{rankingError}</Text>
+                    <Text color="gray.500" fontSize="sm">Intenta nuevamente más tarde.</Text>
+                  </VStack>
+                ) : ranking.length === 0 ? (
+                  <VStack spacing={4} py={8}>
+                    <Icon as={FiTrendingUp} boxSize={12} color="gray.400" />
+                    <Text fontSize="lg" color="gray.600">Aún no hay datos de ranking</Text>
+                    <Text color="gray.500" textAlign="center">Completa recursos para sumar puntos y aparecer en el ranking</Text>
+                  </VStack>
+                ) : (
+                  <VStack spacing={3} align="stretch">
+                    {ranking.map((entry, idx) => {
+                      const position = idx + 1
+                      const isTop3 = position <= 3
+                      const isCurrentUser = entry.user_id === user?.id
+                      const trophyColor = position === 1 ? '#DAA520' : position === 2 ? '#C0C0C0' : position === 3 ? '#CD7F32' : undefined
+                      const bg = isTop3 ? (position === 1 ? 'yellow.50' : position === 2 ? 'gray.50' : 'orange.50') : 'transparent'
+                      const displayName = (() => {
+                        if (isCurrentUser) {
+                          const firstName = user?.user_metadata?.first_name || user?.email?.split('@')[0] || 'Yo'
+                          const lastName = user?.user_metadata?.last_name || ''
+                          return `${firstName}${lastName ? ' ' + lastName : ''}`
+                        }
+                        // Fallback: mostrar parte del user_id
+                        const uid = entry.user_id
+                        return `Usuario ${uid.slice(0, 4)}…${uid.slice(-4)}`
+                      })()
+                      return (
+                        <HStack key={entry.user_id} spacing={4} p={3} borderRadius="md" bg={bg} borderWidth={isTop3 ? '1px' : '0'} borderColor={borderColor}>
+                          <HStack minW="80px" w="80px">
+                            <Badge colorScheme="blue" fontSize="md">{position}°</Badge>
+                            {isTop3 && <Icon as={FiAward} color={trophyColor} />}
+                          </HStack>
+                          <HStack justify="space-between" flex={1}>
+                            <Text fontWeight={isTop3 ? 'semibold' : 'normal'} color={isCurrentUser ? 'blue.600' : undefined}>{displayName}</Text>
+                            <HStack>
+                              <Badge colorScheme={isTop3 ? 'purple' : 'gray'}>Total</Badge>
+                              <Text fontWeight="bold">{entry.total_score}</Text>
+                            </HStack>
+                          </HStack>
+                        </HStack>
+                      )
+                    })}
+                  </VStack>
+                )}
               </CardBody>
             </Card>
           </VStack>
@@ -1570,6 +1675,76 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
                               </HStack>
                             </>
                           )
+                        } else if (el.type === 'mnemonic_creator') {
+                          return (
+                            <>
+                              <Nemotecnia
+                                key={`mn-${currentAttemptId ?? 'noattempt'}-${playingResourceId ?? 'nores'}-${studyIndex}`}
+                                title={playingTitle}
+                                content={el.content as any}
+                                onAutoGenerated={(text) => setMnemonicAuto(text)}
+                                onDraftChange={(text) => setMnemonicDraft(text)}
+                                onCompleted={() => {
+                                  // Marca como listo pero NO guarda aún; el guardado ocurrirá al presionar Continuar
+                                  setStudyItemCompleted(true)
+                                  if (user?.id && playingResourceId) {
+                                    saveResourceProgress(user.id, playingResourceId, {
+                                      stage: 'study',
+                                      studyIndex,
+                                      studyItemCompleted: true,
+                                    })
+                                  }
+                                }}
+                              />
+                              <HStack mt={4} justify="flex-end">
+                                <Button colorScheme="blue" isLoading={isSavingMnemonic} onClick={async () => {
+                                  // Guardar mnemotecnia al presionar Continuar
+                                  if (user?.id && playingResourceId) {
+                                    try {
+                                      setIsSavingMnemonic(true)
+                                      await persistMnemonic(playingResourceId, user.id, (el.content as any), mnemonicAuto, mnemonicDraft)
+                                      // Tras guardar, continuar flujo
+                                      const next = studyIndex + 1
+                                      setStudyItemCompleted(false)
+                                      setIsSavingMnemonic(false)
+                                      if (next < playingStudyElements.length) {
+                                        setStudyIndex(next)
+                                        saveResourceProgress(user.id, playingResourceId, {
+                                          stage: 'study',
+                                          studyIndex: next,
+                                          studyItemCompleted: false,
+                                        })
+                                      } else {
+                                        // Después de crear la mnemotecnia, llevar a práctica antes de juegos
+                                        setMatchUpStage('mnemonic_practice')
+                                        saveResourceProgress(user.id, playingResourceId, { stage: 'mnemonic_practice' })
+                                      }
+                                    } catch (e) {
+                                      setIsSavingMnemonic(false)
+                                      // Continuar incluso si falla, pero notificar
+                                      const next = studyIndex + 1
+                                      setStudyItemCompleted(false)
+                                      if (next < playingStudyElements.length) {
+                                        setStudyIndex(next)
+                                        if (user?.id && playingResourceId) {
+                                          saveResourceProgress(user.id, playingResourceId, {
+                                            stage: 'study',
+                                            studyIndex: next,
+                                            studyItemCompleted: false,
+                                          })
+                                        }
+                                      } else {
+                                        setMatchUpStage('mnemonic_practice')
+                                        if (user?.id && playingResourceId) {
+                                          saveResourceProgress(user.id, playingResourceId, { stage: 'mnemonic_practice' })
+                                        }
+                                      }
+                                    }
+                                  }
+                                }}>Continuar</Button>
+                              </HStack>
+                            </>
+                          )
                         }
                         return null
                       })()}
@@ -1597,6 +1772,32 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
                             saveResourceProgress(user.id, playingResourceId, { stage: 'lines', quizConfirmed: true })
                           }
                         }} isDisabled={!quizCompleted}>Continuar</Button>
+                      </HStack>
+                    </>
+                  )}
+                  {matchUpStage === 'mnemonic_practice' && playingStudyElements && playingStudyElements[studyIndex]?.type === 'mnemonic_creator' && (
+                    <>
+                      <MnemonicPractice
+                        key={`mnprac-${currentAttemptId ?? 'noattempt'}-${playingResourceId ?? 'nores'}`}
+                        content={(playingStudyElements[studyIndex]?.content as any)}
+                        mnemonicText={mnemonicDraft || mnemonicAuto}
+                        onComplete={(_results, score) => {
+                          // resultados disponibles en 'results' si se requiere mostrar un resumen más adelante
+                          setMnemonicPracticeCompleted(true)
+                          if (user?.id && playingResourceId) {
+                            saveResourceProgress(user.id, playingResourceId, { stage: 'mnemonic_practice', mnemonicPracticeCompleted: true })
+                          }
+                          toast({ title: 'Práctica de mnemotecnia', description: `Tu puntuación: ${score}/100`, status: 'success', duration: 3000 })
+                        }}
+                      />
+                      <HStack mt={4} justify="flex-end">
+                        <Button colorScheme="blue" onClick={() => {
+                          // Continuar al siguiente elemento de juego
+                          setMatchUpStage(playingQuiz ? 'quiz' : 'lines')
+                          if (user?.id && playingResourceId) {
+                            saveResourceProgress(user.id, playingResourceId, { stage: playingQuiz ? 'quiz' : 'lines' })
+                          }
+                        }} isDisabled={!mnemonicPracticeCompleted}>Continuar</Button>
                       </HStack>
                     </>
                   )}
@@ -1694,10 +1895,9 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
                         ) : (
                           <Button colorScheme="blue" onClick={async () => {
                             await finalizeSession()
-                            setMatchUpStage('summary')
+                            setMatchUpStage('debate')
                             if (user?.id && playingResourceId) {
-                              saveResourceProgress(user.id, playingResourceId, { stage: 'summary' })
-                              setCompletedResourceIds(prev => new Set([...prev, playingResourceId]))
+                              saveResourceProgress(user.id, playingResourceId, { stage: 'debate' })
                             }
                           }}>Finalizar</Button>
                         )}
@@ -1868,14 +2068,11 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
                         renderContinueButton={
                           <Button colorScheme="blue" onClick={async () => {
                             await finalizeSession()
-                            const nextStage = playingAnagram ? 'anagram' : 'summary'
+                            const nextStage = playingAnagram ? 'anagram' : 'debate'
                             setMatchUpStage(nextStage)
                             if (user?.id && playingResourceId) {
                               console.debug('Progress confirmed: open_box → ' + nextStage, { resourceId: playingResourceId, openBoxConfirmed: true })
                               saveResourceProgress(user.id, playingResourceId, { stage: nextStage as any, openBoxConfirmed: true })
-                              if (nextStage === 'summary') {
-                                setCompletedResourceIds(prev => new Set([...prev, playingResourceId]))
-                              }
                             }
                           }} isDisabled={!openBoxCompleted}>Continuar</Button>
                         }
@@ -1897,15 +2094,34 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
                         renderContinueButton={
                           <Button colorScheme="blue" onClick={async () => {
                             await finalizeSession()
-                            setMatchUpStage('summary')
+                            setMatchUpStage('debate')
                             if (user?.id && playingResourceId) {
-                              console.debug('Progress confirmed: anagram → summary', { resourceId: playingResourceId, anagramConfirmed: true })
-                              saveResourceProgress(user.id, playingResourceId, { stage: 'summary', anagramConfirmed: true })
-                              setCompletedResourceIds(prev => new Set([...prev, playingResourceId]))
+                              console.debug('Progress confirmed: anagram → debate', { resourceId: playingResourceId, anagramConfirmed: true })
+                              saveResourceProgress(user.id, playingResourceId, { stage: 'debate', anagramConfirmed: true })
                             }
                           }} isDisabled={!anagramCompleted}>Continuar</Button>
                         }
                       />
+                    </>
+                  )}
+                  {matchUpStage === 'debate' && playingDebate && (
+                    <>
+                      <Debate
+                        key={`deb-${currentAttemptId ?? 'noattempt'}-${playingResourceId ?? 'nores'}`}
+                        title={playingTitle}
+                        content={playingDebate}
+                        onComplete={async () => {
+                          await finalizeSession()
+                          setMatchUpStage('summary')
+                          if (user?.id && playingResourceId) {
+                            saveResourceProgress(user.id, playingResourceId, { stage: 'summary', debateCompleted: true })
+                            setCompletedResourceIds(prev => new Set([...prev, playingResourceId]))
+                          }
+                        }}
+                      />
+                      <HStack mt={4} justify="flex-end">
+                        <Button variant="outline" onClick={() => setMatchUpStage('summary')}>Saltar</Button>
+                      </HStack>
                     </>
                   )}
                   {matchUpStage === 'summary' && (

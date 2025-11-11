@@ -15,11 +15,14 @@ import {
   HStack,
   Text,
   useToast,
-  Spinner
+  Spinner,
+  Checkbox,
+  CheckboxGroup,
+  SimpleGrid
 } from '@chakra-ui/react'
-import { generateMatchUpResource } from '../../services/openrouter'
+import { generateStudyOnlyResource, generateGameElementsOnly } from '../../services/openrouter'
 import type { ResourceFormData } from '../../services/types'
-import { saveEducationalResource, type CreateResourceData } from '../../services/resources'
+import { saveEducationalResource, appendGameElementsToResource, type CreateResourceData } from '../../services/resources'
 import { useAuth } from '../../contexts/AuthContext'
 import { userProfileService } from '../../services/userProfileService'
 
@@ -39,6 +42,25 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
     subject: '',
     topic: ''
   })
+  // Nuevo: selección de elementos de juego y aprendizaje
+  const GAME_OPTIONS = [
+    { key: 'match_up', label: 'Match Up' },
+    { key: 'quiz', label: 'Quiz' },
+    { key: 'group_sort', label: 'Ordenar por Grupo' },
+    { key: 'anagram', label: 'Anagrama' },
+    { key: 'open_the_box', label: 'Abre Cajas' },
+    { key: 'find_the_match', label: 'Cada oveja con su pareja' },
+  ]
+  const LEARNING_OPTIONS = [
+    { key: 'timeline', label: 'Línea de Tiempo' },
+    { key: 'course_presentation', label: 'Presentación (diapositivas)' },
+    { key: 'accordion_notes', label: 'Notas en Acordeón' },
+    { key: 'mnemonic_creator', label: 'Mnemotecnia' },
+  ]
+  const [selectedGame, setSelectedGame] = useState<string[]>([])
+  const [selectedLearning, setSelectedLearning] = useState<string[]>([])
+  const minGame = 3
+  const minLearning = 2
   const [profileLoading, setProfileLoading] = useState(false)
   const [profileBirth, setProfileBirth] = useState<{ birth_day?: string; birth_month?: string; birth_year?: string }>({})
   const [profileLearningGoal, setProfileLearningGoal] = useState<string | undefined>(undefined)
@@ -84,13 +106,24 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
       return
     }
 
-    if (!formData.subject || !formData.topic) {
+    // Validación: Materia/Curso y Tema son obligatorios
+    const subj = (formData.subject || '').trim()
+    const topc = (formData.topic || '').trim()
+    if (!subj || !topc) {
       toast({
-        title: 'Campos requeridos',
-        description: 'Por favor completa la materia y el tema',
-        status: 'error',
-        duration: 3000,
-        isClosable: true
+        title: 'Campos obligatorios faltantes',
+        description: 'Materia/Curso y Tema son obligatorios.',
+        status: 'error', duration: 4000, isClosable: true
+      })
+      return
+    }
+
+    // Validaciones de selección mínima
+    if (selectedLearning.length < minLearning || selectedGame.length < minGame) {
+      toast({
+        title: 'Selecciones insuficientes',
+        description: `Debes elegir al menos ${minLearning} elementos de aprendizaje y ${minGame} elementos de juego`,
+        status: 'warning', duration: 4000, isClosable: true
       })
       return
     }
@@ -111,46 +144,67 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
         learningGoal: profileLearningGoal || user.user_metadata?.learning_goal
       }
 
-      console.log('🚀 Generando recurso con OpenRouter (Match up)...')
+      console.log('🚀 Generando SOLO elementos de aprendizaje...')
       console.log('📋 Datos del formulario:', resourceData)
       console.log('👤 Datos del usuario (perfil Supabase + metadata):', {
         birthData: resourceData.userBirthData,
         learningGoal: resourceData.learningGoal
       })
 
-      // Generar recurso con OpenRouter (Match up)
-      const generatedResource = await generateMatchUpResource(resourceData, { userId: user.id })
+      // Generar SOLO elementos de aprendizaje
+      const generatedResource = await generateStudyOnlyResource(resourceData, selectedLearning)
 
       console.log('✅ Recurso generado exitosamente:', generatedResource)
 
-      // Guardar un único recurso combinado (Match up)
+      // Guardar un único recurso con SOLO aprendizaje inicialmente
+      // Prune: mantener únicamente los elementos de aprendizaje seleccionados
+      const selectedElements = [...selectedGame, ...selectedLearning]
+      const prunedContent: any = {
+        title: generatedResource.title,
+        summary: generatedResource.summary,
+        difficulty: generatedResource.difficulty || 'Intermedio',
+      }
+      // Study elements (solo)
+      if (Array.isArray(generatedResource.studyElements)) {
+        prunedContent.studyElements = generatedResource.studyElements.filter(el => selectedLearning.includes(el.type))
+      }
+
       const saveCombined: CreateResourceData = {
         user_id: user.id,
         title: generatedResource.title,
         subject: formData.subject,
         topic: formData.topic,
         difficulty: generatedResource.difficulty || 'Intermedio',
-        content: generatedResource
+        content: prunedContent,
+        selected_elements: selectedElements
       }
       const { data: savedCombined, error: saveErrCombined } = await saveEducationalResource(saveCombined)
       if (saveErrCombined) throw saveErrCombined
 
       console.log('✅ Recurso combinado guardado en Supabase:', { savedCombined })
 
-      toast({
-        title: 'Recurso creado de manera exitosa.',
-        status: 'success',
-        duration: 4000,
-        isClosable: true
-      })
+      toast({ title: 'Recurso creado con elementos de aprendizaje.', description: 'Los elementos de juego se están generando en segundo plano.', status: 'success', duration: 4000, isClosable: true })
 
-      // Resetear formulario
-      setFormData({
-        subject: '',
-        topic: ''
-      })
-      
+      // Resetear formulario y cerrar el modal inmediatamente
+      setFormData({ subject: '', topic: '' })
+      setSelectedGame([])
+      setSelectedLearning([])
       onClose()
+
+      // Generación en segundo plano de elementos de juego y actualización incremental (no bloquea el modal)
+      ;(async () => {
+        try {
+          const gameBundle = await generateGameElementsOnly(resourceData, selectedGame)
+          if (savedCombined?.id) {
+            await appendGameElementsToResource(savedCombined.id, gameBundle)
+            // El toast se puede mostrar aunque el modal esté cerrado
+            toast({ title: 'Elementos de juego listos', status: 'success', duration: 3000, isClosable: true })
+          }
+        } catch (bgErr) {
+          console.warn('Error generando elementos de juego en segundo plano:', bgErr)
+          toast({ title: 'Error en elementos de juego (bg)', description: bgErr instanceof Error ? bgErr.message : 'No se pudieron generar algunos juegos', status: 'warning', duration: 4000, isClosable: true })
+        }
+      })()
     } catch (error) {
       console.error('❌ Error al generar recurso:', error)
       toast({
@@ -175,32 +229,59 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
         <ModalCloseButton />
         <ModalBody>
           <VStack spacing={6} align="stretch">
-            <Text fontSize="md" color="gray.600" textAlign="center">
-              Ingresa la materia y el tema para generar un recurso educativo interactivo personalizado
-            </Text>
+         
             
-            <FormControl isRequired>
-              <FormLabel>Materia / Curso</FormLabel>
-              <Input
-                placeholder="Ej: Matemáticas, Historia, Programación, Biología..."
-                value={formData.subject}
-                onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                size="lg"
-              />
-            </FormControl>
+            <HStack spacing={4} align="stretch">
+              <FormControl isRequired>
+                <FormLabel>Materia / Curso</FormLabel>
+                <Input
+                  placeholder="Ej: Matemáticas, Historia, Programación, Biología..."
+                  value={formData.subject}
+                  onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                  size="lg"
+                />
+              </FormControl>
+              <FormControl isRequired>
+                <FormLabel>Tema</FormLabel>
+                <Input
+                  placeholder="Ej: Ecuaciones cuadráticas, Segunda Guerra Mundial, Funciones en JavaScript..."
+                  value={formData.topic}
+                  onChange={(e) => setFormData({ ...formData, topic: e.target.value })}
+                  size="lg"
+                />
+              </FormControl>
+            </HStack>
 
-            <FormControl isRequired>
-              <FormLabel>Tema</FormLabel>
-              <Input
-                placeholder="Ej: Ecuaciones cuadráticas, Segunda Guerra Mundial, Funciones en JavaScript..."
-                value={formData.topic}
-                onChange={(e) => setFormData({ ...formData, topic: e.target.value })}
-                size="lg"
-              />
-            </FormControl>
+            <VStack align="stretch" spacing={4}>
+              <FormLabel>Elementos de Aprendizaje</FormLabel>
+              <CheckboxGroup colorScheme="green" value={selectedLearning} onChange={(v) => setSelectedLearning(v as string[])}>
+                <SimpleGrid columns={{ base: 1, sm: 2, md: 3 }} spacing={2}>
+                  {LEARNING_OPTIONS.map(opt => (
+                    <Checkbox key={opt.key} value={opt.key}>{opt.label}</Checkbox>
+                  ))}
+                </SimpleGrid>
+              </CheckboxGroup>
+              <Text fontSize="sm" color={selectedLearning.length < minLearning ? 'red.500' : 'gray.600'}>
+                Selecciona al menos {minLearning} elementos de aprendizaje.
+              </Text>
+            </VStack>
+
+            <VStack align="stretch" spacing={4}>
+              <FormLabel>Elementos de Juego</FormLabel>
+              <CheckboxGroup colorScheme="blue" value={selectedGame} onChange={(v) => setSelectedGame(v as string[])}>
+                <SimpleGrid columns={{ base: 1, sm: 2, md: 3 }} spacing={2}>
+                  {GAME_OPTIONS.map(opt => (
+                    <Checkbox key={opt.key} value={opt.key}>{opt.label}</Checkbox>
+                  ))}
+                </SimpleGrid>
+              </CheckboxGroup>
+              <Text fontSize="sm" color={selectedGame.length < minGame ? 'red.500' : 'gray.600'}>
+                Selecciona al menos {minGame} elementos de juego.
+              </Text>
+            </VStack>
 
             <Text fontSize="sm" color="gray.500" textAlign="center" fontStyle="italic">
-              El recurso se generará automáticamente con contenido interactivo basado en tus preferencias de aprendizaje
+              Generaremos únicamente los elementos seleccionados para acelerar la creación y la carga del recurso.
             </Text>
           </VStack>
         </ModalBody>
@@ -219,6 +300,7 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
               isLoading={isGenerating}
               loadingText="Generando con IA..."
               leftIcon={isGenerating ? <Spinner size="sm" /> : undefined}
+              isDisabled={isGenerating || selectedLearning.length < minLearning || selectedGame.length < minGame || !(formData.subject?.trim()) || !(formData.topic?.trim())}
             >
               {isGenerating ? 'Generando...' : (profileLoading ? 'Cargando perfil...' : 'Generar Recurso')}
             </Button>

@@ -43,12 +43,12 @@ const CoursePresentation: React.FC<CoursePresentationProps> = ({ title, content,
       <VStack spacing={4} align="stretch" position="relative" zIndex={1} p={4}>
         <Heading size="md" color="gray.800">{title}</Heading>
         <SlideFade in key={idx} offsetX={direction === 'next' ? 32 : -32} offsetY={0}>
-          <Box bg="rgba(255,255,255,0.9)" borderRadius="md" p={4} boxShadow="md">
+          <Box bg="rgba(255,255,255,0.9)" borderRadius="md" p={4} boxShadow="md" mb={-3}>
             <Heading size="sm" mb={2}>{current.title}</Heading>
             <Text color="gray.800" whiteSpace="pre-line">{current.text}</Text>
           </Box>
         </SlideFade>
-        <HStack justify="space-between">
+        <HStack justify="space-between" mb={4}>
           <Button onClick={goPrev} isDisabled={idx === 0} variant="outline" colorScheme="blue">Anterior</Button>
           <Text color="gray.700">{idx + 1} / {total}</Text>
           {idx < total - 1 ? (

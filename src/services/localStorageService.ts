@@ -8,6 +8,8 @@ export interface LocalEducationalResource {
   topic: string
   difficulty: 'Básico' | 'Intermedio' | 'Avanzado'
   content: GeneratedResource
+  // Nuevo: elementos seleccionados por el usuario (juego y aprendizaje)
+  selected_elements?: string[]
   created_at: string
   updated_at: string
 }
@@ -19,6 +21,8 @@ export interface CreateLocalResourceData {
   topic: string
   difficulty: 'Básico' | 'Intermedio' | 'Avanzado'
   content: GeneratedResource
+  // Nuevo: elementos seleccionados por el usuario (opcional)
+  selected_elements?: string[]
 }
 
 const RESOURCES_KEY = 'educational_resources'

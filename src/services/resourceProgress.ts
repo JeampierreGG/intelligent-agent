@@ -1,9 +1,11 @@
 export type ResourceStage =
   | 'study'
+  | 'mnemonic_practice'
   | 'quiz'
   | 'quiz_summary'
   | 'lines'
   | 'lines_summary'
+  | 'debate'
   | 'images'
   | 'group_sort'
   | 'group_sort_summary'
@@ -17,7 +19,9 @@ export interface ResourceProgressData {
   stage: ResourceStage
   studyIndex: number
   studyItemCompleted?: boolean
+  mnemonicPracticeCompleted?: boolean
   linesCompleted?: boolean
+  debateCompleted?: boolean
   imagesCompleted?: boolean
   // Flags de confirmación al presionar "Continuar" para contabilizar puntuación
   quizConfirmed?: boolean

@@ -64,7 +64,9 @@ const Quiz: React.FC<QuizProps> = ({ content, onComplete }) => {
           <VStack align="stretch" spacing={3}>
             <HStack justify="space-between">
               <Text fontWeight="bold">Pregunta {currentIdx + 1} de {total}</Text>
-              <Badge colorScheme="purple">{content.subject} / {content.topic}</Badge>
+              {([content.subject, content.topic].filter(Boolean).length > 0) && (
+                <Badge colorScheme="purple">{[content.subject, content.topic].filter(Boolean).join(' • ')}</Badge>
+              )}
             </HStack>
             <Text>{q.prompt}</Text>
             <VStack align="stretch" spacing={2}>

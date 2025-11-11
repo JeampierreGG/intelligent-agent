@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { GeneratedResource, StudyElement, StudyTimelineContent, MatchUpPair } from './types'
+import type { GeneratedResource, StudyElement, StudyTimelineContent, MatchUpPair, GameElementBundle } from './types'
 import {
   saveEducationalResourceLocal,
   getUserResourcesLocal,
@@ -16,6 +16,8 @@ export interface EducationalResource {
   topic: string
   difficulty: 'Básico' | 'Intermedio' | 'Avanzado'
   content: GeneratedResource
+  // Nuevo: elementos seleccionados por el usuario (juego y aprendizaje)
+  selected_elements?: string[]
   created_at: string
   updated_at: string
 }
@@ -27,6 +29,8 @@ export interface CreateResourceData {
   topic: string
   difficulty: 'Básico' | 'Intermedio' | 'Avanzado'
   content: GeneratedResource
+  // Nuevo: elementos seleccionados por el usuario (opcional)
+  selected_elements?: string[]
 }
 
 /**
@@ -63,9 +67,9 @@ export const saveEducationalResource = async (resourceData: CreateResourceData) 
       }
 
       console.log('✅ Recurso guardado exitosamente en Supabase:', data)
-      // Persistir detalles relacionados (matchups e elementos de estudio) en sus tablas específicas
+      // Persistir detalles relacionados (matchups y elementos de estudio) en sus tablas específicas
       try {
-        await persistGeneratedDetails(data)
+        await persistGeneratedDetails(data, { persistStudy: true, persistGame: true })
         console.log('✅ Detalles del recurso (matchups/estudio) persistidos correctamente')
       } catch (relErr) {
         console.warn('⚠️ No se pudieron persistir detalles relacionados del recurso:', relErr)
@@ -82,21 +86,83 @@ export const saveEducationalResource = async (resourceData: CreateResourceData) 
 }
 
 /**
+ * Agrega elementos de juego a un recurso ya existente y persiste detalles relacionados.
+ * No toca los elementos de estudio existentes.
+ */
+export const appendGameElementsToResource = async (
+  resourceId: string,
+  gameBundle: GameElementBundle,
+): Promise<void> => {
+  // Intentar Supabase
+  const supabaseAvailable = await isSupabaseAvailable()
+  if (!supabaseAvailable) {
+    console.warn('Supabase no disponible: omitiendo actualización de elementos de juego en recurso existente (solo BD)')
+    return
+  }
+
+  // Obtener recurso actual para mergear contenido
+  const { data: existing, error: getErr } = await supabase
+    .from('educational_resources')
+    .select('id, content')
+    .eq('id', resourceId)
+    .single()
+  if (getErr) throw getErr
+
+  const currentContent: any = existing?.content || {}
+  const mergedContent: any = { ...currentContent }
+  // Combinar bundle dentro de gameelement y en raíz si aplica
+  mergedContent.gameelement = { ...(currentContent.gameelement || {}), ...gameBundle }
+  if (gameBundle.matchUp) mergedContent.matchUp = gameBundle.matchUp
+  if (gameBundle.quiz) mergedContent.quiz = gameBundle.quiz
+  if (gameBundle.groupSort) mergedContent.groupSort = gameBundle.groupSort
+  if (gameBundle.anagram) mergedContent.anagram = gameBundle.anagram
+  if (gameBundle.openTheBox) mergedContent.openTheBox = gameBundle.openTheBox
+  if (gameBundle.findTheMatch) mergedContent.findTheMatch = gameBundle.findTheMatch
+
+  const { error: updErr } = await supabase
+    .from('educational_resources')
+    .update({ content: mergedContent })
+    .eq('id', resourceId)
+  if (updErr) throw updErr
+
+  // Persistir detalles de juego únicamente
+  const lightweightRow: EducationalResource = {
+    id: resourceId,
+    user_id: '',
+    title: currentContent.title || 'Recurso',
+    subject: '',
+    topic: '',
+    difficulty: (currentContent.difficulty || 'Intermedio') as any,
+    content: mergedContent,
+    created_at: '',
+    updated_at: ''
+  }
+
+  // Persistir solo bloques de juego
+  await persistGeneratedDetails(lightweightRow, { persistStudy: false, persistGame: true })
+}
+
+/**
  * Inserta contenido derivado del recurso generado en tablas específicas:
  * - educational_matchup_lines + educational_matchup_line_pairs
  * - educational_matchup_images + educational_matchup_image_items
  * - educational_timelines + educational_timeline_events
  * - educational_study_elements (posiciones 1 y 2 para elementos de estudio previos)
  */
-const persistGeneratedDetails = async (resourceRow: EducationalResource) => {
+const persistGeneratedDetails = async (
+  resourceRow: EducationalResource,
+  opts?: { persistStudy?: boolean; persistGame?: boolean }
+) => {
   const resourceId = resourceRow.id
   const content = resourceRow.content as GeneratedResource
+  const persistStudy = opts?.persistStudy !== undefined ? opts.persistStudy : true
+  const persistGame = opts?.persistGame !== undefined ? opts.persistGame : true
 
   // 1) Game Element (preferir bundle gameelement.matchUp y hacer fallback a gameElements/matchUp)
   const gameBundle = (content.gameelement as any) || null
   const gameEl = (gameBundle?.matchUp ?? content.matchUp ?? (content as any).gameElements) as any
   let matchupLinesId: string | null = null
-  if (gameEl?.linesMode && gameEl.linesMode.pairs && gameEl.linesMode.pairs.length > 0) {
+  if (persistGame && gameEl?.linesMode && gameEl.linesMode.pairs && gameEl.linesMode.pairs.length > 0) {
     const { data: ml, error: mlErr } = await supabase
       .from('educational_matchup_lines')
       .insert({ resource_id: resourceId, title: gameEl.title })
@@ -125,6 +191,7 @@ const persistGeneratedDetails = async (resourceRow: EducationalResource) => {
   let timelineId: string | null = null
   let positionCounter = 1
 
+  if (persistStudy) {
   for (const el of studyElements.slice(0, 2)) {
     if (el.type === 'timeline') {
       const tl = el.content as StudyTimelineContent
@@ -235,6 +302,7 @@ const persistGeneratedDetails = async (resourceRow: EducationalResource) => {
       if (seErr) throw seErr
       positionCounter += 1
     }
+  }
   }
 }
 
