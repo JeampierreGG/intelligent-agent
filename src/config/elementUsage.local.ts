@@ -1,37 +1,16 @@
-// Decide cómo usar imágenes y fuentes para la actividad MatchUp
-// Archivo local para configuración de uso de elementos visuales
-// Se usa en src/services/openrouter.ts
+// Política local para decidir el uso de imágenes en la actividad MatchUp.
+// Este archivo evita errores de build en Vercel al proveer la función
+// decideMatchUpUsage utilizada por los servicios de generación.
 
 import type { ResourceFormData } from '../services/types'
 
-export type PollinationsQuality = 'low' | 'medium' | 'high'
-
-export interface MatchUpUsage {
-  // Si se deben incluir imágenes en la actividad
+export interface MatchUpUsagePolicy {
   useImages: boolean
-  // Máximo de imágenes a incluir
-  maxImages: number
-  // Calidad de Pollinations para generación de imágenes de apoyo
-  pollinationsQuality: PollinationsQuality
-  // Si se debe intentar priorizar imágenes reales (Wikimedia/Wikipedia) cuando el tema lo amerite
-  useWikimediaPriority: boolean
 }
 
-/**
- * Decide el uso de imágenes y fuentes según el tema y materia del formulario
- */
-export function decideMatchUpUsage(formData: ResourceFormData): MatchUpUsage {
-  const subject = (formData.subject || '').toLowerCase()
-  const topic = (formData.topic || '').toLowerCase()
-
-  // Priorizar imágenes reales (Wikimedia) para materias de historia o temas históricos
-  const wikiPriority = subject.includes('hist') || topic.includes('hist')
-
-  return {
-    // Desactivar completamente el modo de imágenes del MatchUp según solicitud
-    useImages: false,
-    maxImages: 4, // el flujo downstream espera exactamente 4 si hay imágenes
-    pollinationsQuality: 'medium',
-    useWikimediaPriority: wikiPriority,
-  }
+// Política mínima: por defecto no usar imágenes. En openrouter.ts actualmente
+// se deshabilita imagesMode de todos modos, pero mantenemos esta función para
+// compatibilidad y posibles ajustes futuros.
+export function decideMatchUpUsage(_formData: ResourceFormData): MatchUpUsagePolicy {
+  return { useImages: false }
 }
