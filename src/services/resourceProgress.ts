@@ -20,6 +20,7 @@ export interface ResourceProgressData {
   studyIndex: number
   studyItemCompleted?: boolean
   mnemonicPracticeCompleted?: boolean
+  mnemonicPracticeConfirmed?: boolean
   linesCompleted?: boolean
   debateCompleted?: boolean
   imagesCompleted?: boolean

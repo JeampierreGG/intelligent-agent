@@ -4,8 +4,11 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
+import Resources from './pages/Resources'
+import Ranking from './pages/Ranking'
 import ReviewResource from './pages/ReviewResource'
 import { DashboardProtectedRoute } from './components/DashboardProtectedRoute'
+import Progress from './pages/Progress'
 
 // Componente para rutas públicas (solo accesibles si no está logueado)
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -49,6 +52,30 @@ function App() {
               element={
                 <DashboardProtectedRoute>
                   <Dashboard />
+                </DashboardProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/recursos" 
+              element={
+                <DashboardProtectedRoute>
+                  <Resources />
+                </DashboardProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/ranking" 
+              element={
+                <DashboardProtectedRoute>
+                  <Ranking />
+                </DashboardProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/progreso" 
+              element={
+                <DashboardProtectedRoute>
+                  <Progress />
                 </DashboardProtectedRoute>
               } 
             />

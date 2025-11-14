@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Box, Button, HStack, Input, Text, VStack, Tag, TagLabel, Spacer } from '@chakra-ui/react'
 import type { AnagramContent } from '../../services/types'
 
@@ -18,6 +18,8 @@ const Anagram: React.FC<AnagramProps> = ({ content, onComplete, renderContinueBu
   const [checked, setChecked] = useState<boolean[]>(items.map(() => false))
   const [results, setResults] = useState<boolean[]>(items.map(() => false))
   const [finished, setFinished] = useState<boolean>(false)
+
+  const allChecked = useMemo(() => checked.length > 0 && checked.every(Boolean), [checked])
 
   const checkItem = (idx: number) => {
     const user = normalize(inputs[idx])
@@ -39,6 +41,13 @@ const Anagram: React.FC<AnagramProps> = ({ content, onComplete, renderContinueBu
     setFinished(true)
     onComplete?.(computed)
   }
+
+  // Si el usuario ya verificó todos los ítems, finalizar automáticamente para habilitar "Continuar"
+  useEffect(() => {
+    if (!finished && allChecked && items.length > 0) {
+      handleFinish()
+    }
+  }, [allChecked, finished, items.length])
 
   return (
     <VStack align="stretch" spacing={4}>
@@ -77,7 +86,7 @@ const Anagram: React.FC<AnagramProps> = ({ content, onComplete, renderContinueBu
         })}
       </VStack>
       <HStack w="100%" align="center">
-        <Button colorScheme="red" variant="outline" onClick={handleFinish} isDisabled={finished}>Omitir y perder puntos</Button>
+        <Button colorScheme="red" variant="outline" onClick={handleFinish} isDisabled={finished || allChecked}>Omitir y perder puntos</Button>
         <Spacer />
         {renderContinueButton}
       </HStack>

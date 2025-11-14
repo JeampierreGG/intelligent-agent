@@ -14,7 +14,8 @@ const isSupabaseAvailable = async (): Promise<boolean> => {
   }
 }
 
-// Obtiene el ranking global sumando el mayor puntaje final por recurso para cada usuario.
+// Obtiene el ranking global sumando el MEJOR puntaje final por recurso para cada usuario.
+// Esto alinea el total mostrado aquí con el widget "Puntos Totales" del Dashboard.
 // Limita a topN usuarios para eficiencia.
 export async function getGlobalRanking(topN = 50): Promise<GlobalRankingEntry[]> {
   const supa = await isSupabaseAvailable()
@@ -24,34 +25,31 @@ export async function getGlobalRanking(topN = 50): Promise<GlobalRankingEntry[]>
   }
   const { data, error } = await supabase
     .from('educational_resource_attempts')
-    .select('user_id, resource_id, final_score, attempt_number')
+    .select('user_id, resource_id, final_score')
     .not('final_score', 'is', null)
 
   if (error) throw error
 
-  // Para cada usuario y recurso, tomar el puntaje del último intento (attempt_number más alto)
-  const perUserPerResourceLatest: Map<string, Map<string, { attempt: number; score: number }>> = new Map()
+  // Para cada usuario y recurso, tomar el MEJOR puntaje final
+  const perUserPerResourceBest: Map<string, Map<string, number>> = new Map()
   for (const row of (data || [])) {
     const userId = (row as any).user_id as string
     const resId = (row as any).resource_id as string
     const score = Number((row as any).final_score)
-    const attempt = Number((row as any).attempt_number)
-    if (!userId || !resId || isNaN(score) || isNaN(attempt)) continue
-    let resMap = perUserPerResourceLatest.get(userId)
+    if (!userId || !resId || isNaN(score)) continue
+    let resMap = perUserPerResourceBest.get(userId)
     if (!resMap) {
       resMap = new Map()
-      perUserPerResourceLatest.set(userId, resMap)
+      perUserPerResourceBest.set(userId, resMap)
     }
     const prev = resMap.get(resId)
-    if (!prev || attempt > prev.attempt) {
-      resMap.set(resId, { attempt, score })
-    }
+    if (prev == null || score > prev) resMap.set(resId, score)
   }
 
   const totals: GlobalRankingEntry[] = []
-  for (const [userId, resMap] of perUserPerResourceLatest.entries()) {
+  for (const [userId, resMap] of perUserPerResourceBest.entries()) {
     let sum = 0
-    for (const { score } of resMap.values()) sum += score
+    for (const score of resMap.values()) sum += score
     totals.push({ user_id: userId, total_score: Math.round(sum) })
   }
 

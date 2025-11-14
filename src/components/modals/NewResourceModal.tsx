@@ -22,7 +22,7 @@ import {
 } from '@chakra-ui/react'
 import { generateStudyOnlyResource, generateGameElementsOnly } from '../../services/openrouter'
 import type { ResourceFormData } from '../../services/types'
-import { saveEducationalResource, appendGameElementsToResource, type CreateResourceData } from '../../services/resources'
+import { saveEducationalResource, type CreateResourceData } from '../../services/resources'
 import { useAuth } from '../../contexts/AuthContext'
 import { userProfileService } from '../../services/userProfileService'
 
@@ -44,7 +44,7 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
   })
   // Nuevo: selección de elementos de juego y aprendizaje
   const GAME_OPTIONS = [
-    { key: 'match_up', label: 'Match Up' },
+    { key: 'match_up', label: 'Unir parejas' },
     { key: 'quiz', label: 'Quiz' },
     { key: 'group_sort', label: 'Ordenar por Grupo' },
     { key: 'anagram', label: 'Anagrama' },
@@ -144,67 +144,61 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
         learningGoal: profileLearningGoal || user.user_metadata?.learning_goal
       }
 
-      console.log('🚀 Generando SOLO elementos de aprendizaje...')
+      console.log('🚀 Generando elementos seleccionados (aprendizaje y juego)...')
       console.log('📋 Datos del formulario:', resourceData)
       console.log('👤 Datos del usuario (perfil Supabase + metadata):', {
         birthData: resourceData.userBirthData,
         learningGoal: resourceData.learningGoal
       })
 
-      // Generar SOLO elementos de aprendizaje
-      const generatedResource = await generateStudyOnlyResource(resourceData, selectedLearning)
+      // Generar en paralelo: elementos de aprendizaje seleccionados + elementos de juego seleccionados
+      const [generatedStudy, gameBundle] = await Promise.all([
+        generateStudyOnlyResource(resourceData, selectedLearning),
+        generateGameElementsOnly(resourceData, selectedGame),
+      ])
 
-      console.log('✅ Recurso generado exitosamente:', generatedResource)
+      console.log('✅ Elementos generados (estudio y juego)')
 
-      // Guardar un único recurso con SOLO aprendizaje inicialmente
-      // Prune: mantener únicamente los elementos de aprendizaje seleccionados
+      // Combinar en un único contenido manteniendo SOLO lo seleccionado
       const selectedElements = [...selectedGame, ...selectedLearning]
-      const prunedContent: any = {
-        title: generatedResource.title,
-        summary: generatedResource.summary,
-        difficulty: generatedResource.difficulty || 'Intermedio',
-      }
-      // Study elements (solo)
-      if (Array.isArray(generatedResource.studyElements)) {
-        prunedContent.studyElements = generatedResource.studyElements.filter(el => selectedLearning.includes(el.type))
+      const combinedContent: any = {
+        title: generatedStudy.title,
+        summary: generatedStudy.summary,
+        difficulty: generatedStudy.difficulty || 'Intermedio',
+        studyElements: Array.isArray(generatedStudy.studyElements)
+          ? generatedStudy.studyElements.filter(el => selectedLearning.includes(el.type))
+          : [],
+        gameelement: { ...gameBundle },
+        // Copias en raíz para compatibilidad con componentes existentes
+        ...(gameBundle.matchUp ? { matchUp: gameBundle.matchUp } : {}),
+        ...(gameBundle.quiz ? { quiz: gameBundle.quiz } : {}),
+        ...(gameBundle.groupSort ? { groupSort: gameBundle.groupSort } : {}),
+        ...(gameBundle.anagram ? { anagram: gameBundle.anagram } : {}),
+        ...(gameBundle.openTheBox ? { openTheBox: gameBundle.openTheBox } : {}),
+        ...(gameBundle.findTheMatch ? { findTheMatch: gameBundle.findTheMatch } : {}),
       }
 
       const saveCombined: CreateResourceData = {
         user_id: user.id,
-        title: generatedResource.title,
+        title: generatedStudy.title,
         subject: formData.subject,
         topic: formData.topic,
-        difficulty: generatedResource.difficulty || 'Intermedio',
-        content: prunedContent,
-        selected_elements: selectedElements
+        difficulty: generatedStudy.difficulty || 'Intermedio',
+        content: combinedContent,
+        selected_elements: selectedElements,
       }
       const { data: savedCombined, error: saveErrCombined } = await saveEducationalResource(saveCombined)
       if (saveErrCombined) throw saveErrCombined
 
-      console.log('✅ Recurso combinado guardado en Supabase:', { savedCombined })
+      console.log('✅ Recurso guardado con TODOS los elementos seleccionados:', { savedCombined })
 
-      toast({ title: 'Recurso creado con elementos de aprendizaje.', description: 'Los elementos de juego se están generando en segundo plano.', status: 'success', duration: 4000, isClosable: true })
+      toast({ title: 'Recurso creado', description: 'Se generaron todos los elementos seleccionados.', status: 'success', duration: 4000, isClosable: true })
 
-      // Resetear formulario y cerrar el modal inmediatamente
+      // Resetear formulario y cerrar el modal
       setFormData({ subject: '', topic: '' })
       setSelectedGame([])
       setSelectedLearning([])
       onClose()
-
-      // Generación en segundo plano de elementos de juego y actualización incremental (no bloquea el modal)
-      ;(async () => {
-        try {
-          const gameBundle = await generateGameElementsOnly(resourceData, selectedGame)
-          if (savedCombined?.id) {
-            await appendGameElementsToResource(savedCombined.id, gameBundle)
-            // El toast se puede mostrar aunque el modal esté cerrado
-            toast({ title: 'Elementos de juego listos', status: 'success', duration: 3000, isClosable: true })
-          }
-        } catch (bgErr) {
-          console.warn('Error generando elementos de juego en segundo plano:', bgErr)
-          toast({ title: 'Error en elementos de juego (bg)', description: bgErr instanceof Error ? bgErr.message : 'No se pudieron generar algunos juegos', status: 'warning', duration: 4000, isClosable: true })
-        }
-      })()
     } catch (error) {
       console.error('❌ Error al generar recurso:', error)
       toast({

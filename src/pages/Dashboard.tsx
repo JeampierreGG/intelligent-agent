@@ -17,7 +17,6 @@ import {
   useColorModeValue,
   useDisclosure,
   Image,
-  Badge,
   Spinner,
   Alert,
   AlertIcon,
@@ -28,17 +27,28 @@ import {
   AlertDialogHeader,
   AlertDialogBody,
   AlertDialogFooter,
+  // New UI components for Attempts modal
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalCloseButton,
+  ModalBody,
+  ModalFooter,
+  Table,
+  Thead,
+  Tbody,
+  Tr,
+  Th,
+  Td,
+  Badge,
 } from '@chakra-ui/react'
 import { Progress } from '@chakra-ui/react'
 import { 
-  FiBook, 
-  FiTrendingUp, 
   FiPlus,
   FiBookOpen,
   FiAward,
-  FiClock,
-  FiPlay,
-  FiRefreshCw
+  FiClock
 } from 'react-icons/fi'
 import { 
   MdDashboard, 
@@ -66,25 +76,24 @@ import Debate from '../components/templates/Debate'
 import type { MatchUpContent, StudyElement, QuizContent, GroupSortContent, AnagramContent, OpenTheBoxContent, FindTheMatchContent, MatchUpPair, FindTheMatchPair, DebateContent } from '../services/types'
 import logoImage from '../assets/Logo-IA.png'
 
-import { getUserResourcesPaginated, type EducationalResource } from '../services/resources'
+import { getUserResourcesPaginated, type EducationalResource, appendGameElementsToResource, getResourceById, getUserResources, updateResource, detectSelectedGameKeys } from '../services/resources'
+import { generateGameElementsOnly } from '../services/openrouter'
 import { supabase } from '../services/supabase'
 import { getResourceProgress, saveResourceProgress, clearResourceProgress } from '../services/resourceProgress'
 import { clearTimelineProgressForResource } from '../services/timelineProgress'
-import { startNewAttempt, completeAttempt, saveAttemptFinalScore, getAttemptCount } from '../services/attempts'
+import { startNewAttempt, completeAttempt, saveAttemptFinalScore, getAttemptCount, getAttemptsForResource, getUserBestScores, getUserTotalCompletedAttemptSeconds } from '../services/attempts'
+// import { getUserTotalStudySeconds } from '../services/resourceSessions' // Reemplazado por cálculo basado en intentos completados
 import { persistMnemonic } from '../services/mnemonics.ts'
-import { getGlobalRanking, type GlobalRankingEntry } from '../services/ranking'
+// Ranking se maneja en su propia página: no se usa en Dashboard
 // Eliminado soporte H5P
 
 export default function Dashboard() {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
   const location = useLocation() as any
-  const toast = useToast()
-  const [activeSection, setActiveSection] = useState('dashboard')
-  // Ranking global
-  const [ranking, setRanking] = useState<GlobalRankingEntry[]>([])
-  const [loadingRanking, setLoadingRanking] = useState<boolean>(false)
-  const [rankingError, setRankingError] = useState<string | null>(null)
+const toast = useToast()
+const [incDiffLoadingMap, setIncDiffLoadingMap] = useState<Record<string, boolean>>({})
+  // Dashboard solo muestra overview. Se eliminaron estados de secciones y ranking.
   const { isOpen, onOpen, onClose } = useDisclosure()
 
   const [resources, setResources] = useState<EducationalResource[]>([])
@@ -92,8 +101,8 @@ export default function Dashboard() {
   const [currentPage, setCurrentPage] = useState<number>(1)
   const pageSize = 12
   const [totalResourcesCount, setTotalResourcesCount] = useState<number>(0)
-  const [loadingResources, setLoadingResources] = useState(false)
-  const [resourcesError, setResourcesError] = useState<string | null>(null)
+const [loadingResources, setLoadingResources] = useState(false)
+  const [, setResourcesError] = useState<string | null>(null)
   // Eliminado estado para reproducción H5P
 const [playingMatchUp, setPlayingMatchUp] = useState<MatchUpContent | null>(null)
 const [playingStudyElements, setPlayingStudyElements] = useState<StudyElement[] | null>(null)
@@ -104,11 +113,16 @@ const [playingStudyElements, setPlayingStudyElements] = useState<StudyElement[] 
   const [sessionStartMs, setSessionStartMs] = useState<number | null>(null)
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0)
   const [isPaused, setIsPaused] = useState<boolean>(false)
-  const [activeResourceIds, setActiveResourceIds] = useState<Set<string>>(new Set())
-  const [completedResourceIds, setCompletedResourceIds] = useState<Set<string>>(new Set())
+  const [, setActiveResourceIds] = useState<Set<string>>(new Set())
+  const [, setCompletedResourceIds] = useState<Set<string>>(new Set())
+  const [startedResourceIds, setStartedResourceIds] = useState<Set<string>>(new Set())
   // Mapas para progreso (%) y puntaje (0-100) por recurso
   const [resourceProgressMap, setResourceProgressMap] = useState<Record<string, number>>({})
   const [resourceScoreMap, setResourceScoreMap] = useState<Record<string, number>>({})
+  // Carga específica para tarjetas de "Recursos recientes" hasta que se calcule progreso y puntaje
+  const [loadingRecentCards, setLoadingRecentCards] = useState<boolean>(false)
+  const [totalBestPoints, setTotalBestPoints] = useState<number>(0)
+  const [totalStudySeconds, setTotalStudySeconds] = useState<number>(0)
   const [studyIndex, setStudyIndex] = useState<number>(0)
 const [matchUpStage, setMatchUpStage] = useState<'study' | 'mnemonic_practice' | 'quiz' | 'quiz_summary' | 'lines' | 'lines_summary' | 'group_sort' | 'group_sort_summary' | 'find_the_match' | 'find_the_match_summary' | 'open_box' | 'anagram' | 'debate' | 'summary' | null>(null)
   const [linesCompleted, setLinesCompleted] = useState<boolean>(false)
@@ -120,6 +134,8 @@ const [matchUpStage, setMatchUpStage] = useState<'study' | 'mnemonic_practice' |
   // Resultados de imágenes desactivados
   const [quizResults, setQuizResults] = useState<Array<{ prompt: string; chosenIndex: number; correctIndex: number; chosenText: string; correctText: string; correct: boolean; explanation?: string }>>([])
   const [groupSortResults, setGroupSortResults] = useState<Array<{ item: string; chosenGroup: string; expectedGroup: string; correct: boolean }>>([])
+  // Resultados de práctica de mnemotecnia
+  const [mnemonicPracticeResults, setMnemonicPracticeResults] = useState<Array<{ prompt: string; answer: string; userAnswer: string; correct: boolean }>>([])
   const [currentAttemptId, setCurrentAttemptId] = useState<string | null>(null)
   const [playingQuiz, setPlayingQuiz] = useState<QuizContent | null>(null)
   const [playingGroupSort, setPlayingGroupSort] = useState<GroupSortContent | null>(null)
@@ -146,6 +162,8 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
   const [matchupLinesId, setMatchupLinesId] = useState<string | null>(null)
   // Intento actual (número) para asociar puntajes parciales correctamente
   const [currentAttemptNumber, setCurrentAttemptNumber] = useState<number | null>(null)
+  // Bloqueo posterior a "Aumentar dificultad" hasta que el usuario inicie el primer intento con la nueva dificultad
+  const [postIncreaseLockMap, setPostIncreaseLockMap] = useState<Record<string, boolean>>({})
   // ID de MatchUp Images desactivado
   // Estado para revisión por intentos (panel de revisión inline eliminado)
   // Eliminado: reviewResourceId, reviewAttempts, selectedReviewAttempt
@@ -158,17 +176,13 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
   // Confirmación de salida del recurso
   const { isOpen: isExitOpen, onOpen: onExitOpen, onClose: onExitClose } = useDisclosure()
   const exitCancelRef = useRef<HTMLButtonElement | null>(null)
+  // Review Attempts Modal state
+  const { isOpen: isAttemptsOpen, onOpen: onAttemptsOpen, onClose: onAttemptsClose } = useDisclosure()
+  const [reviewResource, setReviewResource] = useState<EducationalResource | null>(null)
+  const [attemptsForReview, setAttemptsForReview] = useState<Array<{ attempt_number: number; final_score?: number | null }>>([])
+  const [loadingAttempts, setLoadingAttempts] = useState(false)
   
-  // Permitir que la navegación externa seleccione la sección activa (por ejemplo, desde la página de revisión)
-  useEffect(() => {
-    try {
-      const section = location?.state?.section as string | undefined
-      if (section) {
-        setActiveSection(section)
-      }
-    } catch {}
-  }, [location?.state?.section])
-
+  // Eliminada sincronización de secciones: cada vista tiene su propia ruta top-level
 
 
   // Computa la puntuación final del recurso en base a 100 puntos,
@@ -200,12 +214,12 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
       elements.push({ name: 'Quiz', denom, correct: prog?.quizConfirmed ? correct : 0 })
     }
 
-    // Emparejamientos (líneas)
+    // Unir parejas (líneas)
     if (playingMatchUp) {
       const denom = playingMatchUp.linesMode?.pairs?.length ?? 0
       const correct = linesResults.filter(r => r.correct).length
       // Solo contar resultado tras presionar Continuar
-      elements.push({ name: 'Emparejamientos (líneas)', denom, correct: prog?.linesConfirmed ? correct : 0 })
+    elements.push({ name: 'Unir parejas', denom, correct: prog?.linesConfirmed ? correct : 0 })
     }
 
     // Ordenar por grupo
@@ -234,6 +248,14 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
       const denom = playingFindTheMatch.pairs?.length ?? 0
       const correct = findMatchResults.filter(r => r.correct).length
       elements.push({ name: 'Cada oveja con su pareja', denom, correct: prog?.findTheMatchConfirmed ? correct : 0 })
+    }
+
+    // Práctica de mnemotecnia (si estuvo presente y hay resultados)
+    if ((mnemonicPracticeResults?.length ?? 0) > 0) {
+      const denom = mnemonicPracticeResults.length
+      const correct = mnemonicPracticeResults.filter(r => r.correct).length
+      // Solo contar una vez que el usuario confirme (Continuar) desde la práctica
+      elements.push({ name: 'Práctica de mnemotecnia', denom, correct: (prog as any)?.mnemonicPracticeConfirmed ? correct : 0 })
     }
 
     const totalElements = elements.length
@@ -265,6 +287,7 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
     playingOpenBox,
     playingAnagram,
     playingFindTheMatch,
+    mnemonicPracticeResults,
     quizResults,
     linesResults,
     groupSortResults,
@@ -362,6 +385,7 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
     const loadUserResources = async () => {
       if (user?.id) {
         setLoadingResources(true)
+        setLoadingRecentCards(true)
         setResourcesError(null)
         try {
           const { data, count, error } = await getUserResourcesPaginated(user.id, currentPage, pageSize)
@@ -387,23 +411,29 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
           // Marcar recursos completados (llegaron al resumen) para ajustar estados de botones
           try {
             const completed = new Set<string>()
+            const started = new Set<string>()
             const progressMap: Record<string, number> = {}
             const scoreMap: Record<string, number> = {}
             for (const r of (data || [])) {
               const prog = getResourceProgress(user.id, r.id)
+              if (prog && prog.stage) {
+                started.add(r.id)
+              }
               if (prog?.stage === 'summary') {
                 completed.add(r.id)
               }
               // Progreso por recurso
               progressMap[r.id] = computeCardProgress(r, prog)
-              // Puntaje final del último intento (si existe)
+              // Puntaje final más alto entre todos los intentos (si existe)
               try {
                 const { data: att } = await supabase
                   .from('educational_resource_attempts')
                   .select('final_score, attempt_number')
                   .eq('user_id', user.id)
                   .eq('resource_id', r.id)
-                  .order('attempt_number', { ascending: false })
+                  .not('final_score', 'is', null)
+                  // Mostrar mejor puntaje alcanzado
+                  .order('final_score', { ascending: false })
                   .limit(1)
                 const finalScore = (att?.[0]?.final_score as number | null) ?? null
                 if (finalScore != null) {
@@ -437,7 +467,27 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
               }
             }
             setCompletedResourceIds(completed)
+            setStartedResourceIds(started)
             setResourceProgressMap(progressMap)
+            // Marcar si existe al menos un intento para cada recurso (para alternar botones)
+            try {
+              const attemptPresence: Record<string, boolean> = {}
+              for (const r of data || []) {
+                try {
+                  const { data: att } = await supabase
+                    .from('educational_resource_attempts')
+                    .select('attempt_number')
+                    .eq('user_id', user.id)
+                    .eq('resource_id', r.id)
+                    .order('attempt_number', { ascending: false })
+                    .limit(1)
+                  attemptPresence[r.id] = Array.isArray(att) && att.length > 0
+                } catch {
+                  attemptPresence[r.id] = false
+                }
+              }
+              setHasAttemptMap(attemptPresence)
+            } catch {}
             // Fallback adicional: si alguna tarjeta quedó sin puntaje por falta de datos remotos,
             // intenta cargar un puntaje parcial almacenado localmente.
             try {
@@ -468,6 +518,7 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
           setResourcesError('Error al cargar los recursos')
         } finally {
           setLoadingResources(false)
+          setLoadingRecentCards(false)
         }
       }
     }
@@ -475,25 +526,144 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
     loadUserResources()
   }, [user?.id, currentPage])
 
-  // Cargar ranking global cuando se selecciona la sección "ranking"
+  // Arrancar reproducción si venimos desde /recursos con un playResourceId en el state
   useEffect(() => {
-    const loadRanking = async () => {
-      if (activeSection !== 'ranking') return
-      setLoadingRanking(true)
-      setRankingError(null)
+    const maybeStartFromState = async () => {
       try {
-        const list = await getGlobalRanking(50)
-        setRanking(list)
+        const playResourceId: string | undefined = location?.state?.playResourceId
+        const forceNew: boolean | undefined = location?.state?.forceNew
+        if (!user?.id || !playResourceId) return
+
+        // Buscar en los ya cargados; si no está, traerlo puntualmente
+        let res = resources.find(r => r.id === playResourceId)
+        if (!res) {
+          const single = await getResourceById(playResourceId, user.id)
+          if (single?.data) {
+            res = single.data as EducationalResource
+          }
+        }
+        if (res) {
+          await handlePlayResource(res, { forceNewSession: !!forceNew })
+          // Limpiar el state para evitar re-ejecuciones al re-renderizar
+          try { navigate('/dashboard', { replace: true }) } catch {}
+        }
       } catch (e) {
-        console.error('Error cargando ranking global:', e)
-        setRankingError('No se pudo cargar el ranking global')
-      } finally {
-        setLoadingRanking(false)
+        console.warn('No se pudo iniciar desde state:', e)
       }
     }
     // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    loadRanking()
-  }, [activeSection])
+    maybeStartFromState()
+    // Ejecutar cuando cambie el state de navegación o los recursos cargados
+  }, [location?.state, user?.id, resources])
+
+  // Cargar widgets: puntos totales (mejores puntajes) y tiempo de estudio total
+  useEffect(() => {
+    const loadWidgets = async () => {
+      if (!user?.id) return
+      try {
+        // Puntos totales: sumar mejor puntaje por recurso
+        const best = await getUserBestScores(user.id)
+        let sum = Object.values(best).reduce((acc, v) => acc + (typeof v === 'number' ? v : 0), 0)
+        if (sum === 0) {
+          // Fallback local: sumar desde recursos locales y localStorage
+          const { data } = await getUserResources(user.id)
+          const list = data || []
+          for (const r of list) {
+            const ls = localStorage.getItem(`final_score_${user.id}_${r.id}`)
+            if (ls) {
+              const n = Math.round(parseFloat(ls))
+              if (!isNaN(n)) sum += n
+            }
+          }
+        }
+        setTotalBestPoints(sum)
+      } catch (e) {
+        console.warn('No se pudo calcular Puntos Totales:', e)
+        setTotalBestPoints(0)
+      }
+
+      try {
+        const secs = await getUserTotalCompletedAttemptSeconds(user.id)
+        setTotalStudySeconds(secs || 0)
+      } catch (e) {
+        console.warn('No se pudo calcular Tiempo de Estudio:', e)
+        setTotalStudySeconds(0)
+      }
+    }
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    loadWidgets()
+  }, [user?.id])
+
+  // Recalcular widgets cuando se guarda un nuevo puntaje final (al llegar a summary)
+  useEffect(() => {
+    const reload = async () => {
+      if (!user?.id) return
+      try {
+        const best = await getUserBestScores(user.id)
+        const sum = Object.values(best).reduce((acc, v) => acc + (typeof v === 'number' ? v : 0), 0)
+        setTotalBestPoints(sum)
+      } catch {}
+      try {
+        const secs = await getUserTotalCompletedAttemptSeconds(user.id)
+        setTotalStudySeconds(secs || 0)
+      } catch {}
+    }
+    if (finalScoreSaved) {
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      reload()
+    }
+  }, [finalScoreSaved, user?.id])
+
+  // Suscripción en tiempo real para actualizar widgets y conteo de recursos sin recargar
+  useEffect(() => {
+    if (!user?.id) return
+    let isCleaning = false
+
+    const recomputeTotals = async () => {
+      if (!user?.id) return
+      try {
+        const best = await getUserBestScores(user.id)
+        const sum = Object.values(best).reduce((acc, v) => acc + (typeof v === 'number' ? v : 0), 0)
+        if (!isCleaning) setTotalBestPoints(sum)
+      } catch {}
+      try {
+        const secs = await getUserTotalCompletedAttemptSeconds(user.id)
+        if (!isCleaning) setTotalStudySeconds(secs || 0)
+      } catch {}
+    }
+
+    const reloadResources = async () => {
+      try {
+        const { data, count, error } = await getUserResourcesPaginated(user.id, currentPage, pageSize)
+        if (error) throw error
+        if (!isCleaning) {
+          setResources(data || [])
+          setTotalResourcesCount(count || 0)
+        }
+      } catch {}
+    }
+
+    const channel = supabase
+      .channel(`dashboard-realtime-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'educational_resource_attempts', filter: `user_id=eq.${user.id}` },
+        () => { void recomputeTotals() }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'educational_resources', filter: `user_id=eq.${user.id}` },
+        () => { void reloadResources() }
+      )
+      .subscribe()
+
+    return () => {
+      isCleaning = true
+      try { supabase.removeChannel(channel) } catch {}
+    }
+  }, [user?.id, currentPage, pageSize])
+
+  // Eliminada carga de ranking: el ranking vive en /ranking
 
   // Guardar puntaje final cuando se llega al resumen
   useEffect(() => {
@@ -538,6 +708,8 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
           findMatchResults,
           attempt_time_seconds: attemptSeconds,
           attempt_progress_pct: attemptProgressPct,
+          // Persistir dificultad del recurso en el momento del intento
+          difficulty: (resources.find(r => r.id === playingResourceId)?.difficulty) || 'Intermedio',
         }
         const ok = await saveAttemptFinalScore(currentAttemptId, rounded, res.breakdown, summarySnapshot)
         if (ok) {
@@ -565,6 +737,8 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
   const [baseAccumulatedSeconds, setBaseAccumulatedSeconds] = useState<number>(0)
   // Tiempo total del recurso (capturado al finalizar la sesión)
   const [totalResourceSeconds, setTotalResourceSeconds] = useState<number | null>(null)
+  // Mapa para saber si un recurso ya tiene al menos un intento (para alternar Comenzar/Reintentar)
+  const [hasAttemptMap, setHasAttemptMap] = useState<Record<string, boolean>>({})
 
   // Tick del temporizador
   useEffect(() => {
@@ -598,6 +772,12 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
       setElapsedSeconds(0)
       if (playingResourceId) {
         setActiveResourceIds(prev => {
+          const next = new Set([...prev])
+          next.delete(playingResourceId)
+          return next
+        })
+        // Al finalizar/pausar la sesión, permitir nuevamente "Reintentar" y deshabilitar "Comenzar"
+        setStartedResourceIds(prev => {
           const next = new Set([...prev])
           next.delete(playingResourceId)
           return next
@@ -715,15 +895,90 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
     if (user?.id) {
       const loadUserResources = async () => {
         setLoadingResources(true)
+        setLoadingRecentCards(true)
         try {
           const { data, count, error } = await getUserResourcesPaginated(user.id, currentPage, pageSize)
           if (error) throw error
-          setResources(data || [])
+          const list = data || []
+          setResources(list)
           setTotalResourcesCount(count || 0)
+          // Recalcular progreso y puntaje como en la carga principal
+          try {
+            const completed = new Set<string>()
+            const progressMap: Record<string, number> = {}
+            const scoreMap: Record<string, number> = {}
+            for (const r of list) {
+              const prog = getResourceProgress(user.id, r.id)
+              if (prog?.stage === 'summary') {
+                completed.add(r.id)
+              }
+              progressMap[r.id] = computeCardProgress(r, prog)
+              try {
+                const { data: att } = await supabase
+                  .from('educational_resource_attempts')
+                  .select('final_score, attempt_number')
+                  .eq('user_id', user.id)
+                  .eq('resource_id', r.id)
+                  .not('final_score', 'is', null)
+                  // Mostrar mejor puntaje alcanzado
+                  .order('final_score', { ascending: false })
+                  .limit(1)
+                const finalScore = (att?.[0]?.final_score as number | null) ?? null
+                if (finalScore != null) {
+                  scoreMap[r.id] = Math.round(finalScore)
+                } else {
+                  try {
+                    const { data: ps } = await supabase
+                      .from('user_scores')
+                      .select('score, computed_at')
+                      .eq('user_id', user.id)
+                      .eq('resource_id', r.id)
+                      .order('computed_at', { ascending: false })
+                      .limit(1)
+                    const partial = (ps?.[0]?.score as number | null) ?? null
+                    if (partial != null) {
+                      scoreMap[r.id] = Math.round(partial)
+                    } else {
+                      const ls = localStorage.getItem(`final_score_${user.id}_${r.id}`)
+                      scoreMap[r.id] = ls ? Math.round(parseFloat(ls)) : 0
+                    }
+                  } catch (e2) {
+                    const ls = localStorage.getItem(`final_score_${user.id}_${r.id}`)
+                    scoreMap[r.id] = ls ? Math.round(parseFloat(ls)) : 0
+                  }
+                }
+              } catch (e) {
+                const ls = localStorage.getItem(`final_score_${user.id}_${r.id}`)
+                scoreMap[r.id] = ls ? Math.round(parseFloat(ls)) : 0
+              }
+            }
+            setCompletedResourceIds(completed)
+            setResourceProgressMap(progressMap)
+            // Fallback local para puntajes faltantes
+            try {
+              for (const r of list) {
+                if (scoreMap[r.id] == null || isNaN(scoreMap[r.id])) {
+                  const ps = localStorage.getItem(`partial_score_${user.id}_${r.id}`)
+                  if (ps != null) {
+                    const parsed = Math.round(parseFloat(ps))
+                    if (!isNaN(parsed)) scoreMap[r.id] = parsed
+                  } else {
+                    const fs = localStorage.getItem(`final_score_${user.id}_${r.id}`)
+                    const parsed = fs ? Math.round(parseFloat(fs)) : 0
+                    scoreMap[r.id] = isNaN(parsed) ? 0 : parsed
+                  }
+                }
+              }
+            } catch {}
+            setResourceScoreMap(scoreMap)
+          } catch (e) {
+            console.warn('No se pudo recomputar progreso tras cerrar modal:', e)
+          }
         } catch (error) {
           console.error('❌ Error recargando recursos:', error)
         } finally {
           setLoadingResources(false)
+          setLoadingRecentCards(false)
         }
       }
       loadUserResources()
@@ -732,7 +987,12 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
 
   const handlePlayResource = async (resource: EducationalResource, options?: { forceNewSession?: boolean }) => {
     try {
-  const matchUp = resource.content?.gameelement?.matchUp || resource.content?.matchUp || (resource.content as any)?.gameElements
+      // No desbloqueamos el bloqueo post-increase aquí. El requerimiento indica
+      // que debe mantenerse hasta finalizar o salir del intento iniciado tras
+      // aumentar la dificultad.
+      // Marcar como iniciado en esta sesión para deshabilitar "Comenzar" mientras dura el intento
+      setStartedResourceIds(prev => new Set([...prev, resource.id]))
+      let matchUp = resource.content?.gameelement?.matchUp || resource.content?.matchUp || (resource.content as any)?.gameElements
       const studyEls = resource.content?.studyElements || []
       const quiz = resource.content?.gameelement?.quiz || (resource.content as any)?.quiz || (resource.content as any)?.gameElements?.quiz
       const groupSort = resource.content?.gameelement?.groupSort || (resource.content as any)?.groupSort || (resource.content as any)?.gameElements?.groupSort
@@ -758,13 +1018,16 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
         setOpenBoxResults([])
         setFindMatchResults([])
       }
-      if (matchUp && matchUp.templateType === 'match_up' && matchUp.linesMode?.pairs?.length > 0) {
+      // Evitar generación en segundo plano: abrimos con lo que ya existe en el recurso
+
+      // Preparar elementos disponibles y abrir inmediatamente el recurso sin bloquear
+      {
         setPlayingMatchUp(matchUp)
         // Preparar elementos de estudio (máx. 2) y añadir Nemotecnia si hay material
         const preparedStudyBase = studyEls.slice(0, 2)
         const mnemonicSourcePairs = (findTheMatch?.pairs && findTheMatch.pairs.length >= 4)
           ? findTheMatch.pairs.slice(0, 4).map((p: FindTheMatchPair) => ({ prompt: p.concept, answer: p.affirmation }))
-          : ((matchUp.linesMode?.pairs?.slice(0, 4) as MatchUpPair[]) || []).map((p: MatchUpPair) => ({ prompt: p.left, answer: p.right }))
+          : ((matchUp?.linesMode?.pairs?.slice(0, 4) as MatchUpPair[]) || []).map((p: MatchUpPair) => ({ prompt: p.left, answer: p.right }))
         const preparedStudy = [...preparedStudyBase]
         if (mnemonicSourcePairs.length === 4) {
           preparedStudy.push({
@@ -784,12 +1047,14 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
         setPlayingResourceId(resource.id)
         setStudyIndex(0)
         setPlayingTitle(resource.title)
-        setMatchUpStage(preparedStudy.length > 0 ? 'study' : (quiz ? 'quiz' : 'lines'))
+        // Si no hay contenido aún excepto match_up sin datos, empezar por estudio/quiz si existen, y dejar 'lines' para cuando termine de generarse
+        const initialStage = preparedStudy.length > 0 ? 'study' : (quiz ? 'quiz' : ((matchUp && matchUp.linesMode?.pairs?.length > 0) ? 'lines' : 'study'))
+        setMatchUpStage(initialStage as any)
         setMnemonicAuto('')
         setMnemonicDraft('')
         setIsSavingMnemonic(false)
         setLinesCompleted(false)
-        setActiveSection('recursos') // mantener contexto de sección
+        // Navegación por secciones eliminada: mantener vista actual
         try { window.scrollTo({ top: 0, behavior: 'auto' }) } catch {}
         setLinesResults([])
         // Imágenes desactivadas
@@ -871,8 +1136,10 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
           }
           setActiveResourceIds(prev => new Set([...prev, resource.id]))
         }
-        // Persistir elementos de juego para tener IDs al guardar puntajes
-        await ensureMatchupElementsPersisted(resource)
+        // Persistir elementos de juego para tener IDs al guardar puntajes (si ya existen)
+        if (matchUp && matchUp.linesMode?.pairs?.length > 0) {
+          await ensureMatchupElementsPersisted(resource)
+        }
         // Reiniciar estado de completado de estudio
         setStudyItemCompleted(false)
 
@@ -892,14 +1159,6 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
             setMatchUpStage(desiredStage)
           }
         }
-      } else {
-        toast({
-          title: 'Recurso sin contenido interactivo',
-          description: 'Este recurso no contiene una plantilla de emparejamiento (Match up) válida.',
-          status: 'warning',
-          duration: 4000,
-          isClosable: true,
-        })
       }
     } catch (error) {
       console.error('❌ Error al iniciar reproducción del recurso:', error)
@@ -915,10 +1174,61 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
 
   const handleReviewResource = (resource: EducationalResource) => {
     try {
+      // Navegar directamente a la vista de revisión como en /recursos
       navigate(`/review/${resource.id}`)
     } catch (e) {
-      console.error('Error al navegar a la revisión del recurso:', e)
+      console.error('Error al abrir revisión de intentos:', e)
       toast({ title: 'No se pudo abrir la revisión', status: 'error', duration: 3000, isClosable: true })
+    }
+  }
+
+  const getNextDifficulty = (current: string): 'Básico' | 'Intermedio' | 'Avanzado' | null => {
+    if (current === 'Básico') return 'Intermedio'
+    if (current === 'Intermedio') return 'Avanzado'
+    return null
+  }
+
+  // detectSelectedGameKeys ahora se importa desde services/resources para evitar duplicación
+
+  const handleIncreaseDifficulty = async (resource: EducationalResource) => {
+    if (!user?.id) return
+    const next = getNextDifficulty(resource.difficulty)
+    if (!next) {
+      toast({ title: 'Dificultad máxima', description: 'Este recurso ya está en Avanzado.', status: 'info', duration: 3000, isClosable: true })
+      return
+    }
+    setIncDiffLoadingMap(prev => ({ ...prev, [resource.id]: true }))
+    try {
+      await updateResource(resource.id, user.id, { difficulty: next } as any)
+      setResources(prev => prev.map(r => r.id === resource.id ? { ...r, difficulty: next } : r))
+      // Bloquear UI de este recurso hasta que el usuario inicie un nuevo intento con la nueva dificultad
+      setPostIncreaseLockMap(prev => ({ ...prev, [resource.id]: true }))
+
+      const selectedGameKeys = detectSelectedGameKeys(resource)
+      if (selectedGameKeys.length > 0) {
+        const formData = {
+          subject: resource.subject,
+          topic: resource.topic,
+          userBirthData: {
+            birth_day: user.user_metadata?.birth_day,
+            birth_month: user.user_metadata?.birth_month,
+            birth_year: user.user_metadata?.birth_year,
+          },
+          learningGoal: user.user_metadata?.learning_goal,
+        }
+        try {
+          const gameBundle = await generateGameElementsOnly(formData as any, selectedGameKeys)
+          await appendGameElementsToResource(resource.id, gameBundle, user.id)
+        } catch (e) {
+          console.warn('No se pudieron regenerar elementos de juego:', e)
+        }
+      }
+      toast({ title: 'Dificultad aumentada', description: `Nueva dificultad: ${next}`, status: 'success', duration: 3000, isClosable: true })
+    } catch (e) {
+      console.error('Error al aumentar dificultad:', e)
+      toast({ title: 'Error', description: 'No se pudo aumentar la dificultad.', status: 'error', duration: 4000, isClosable: true })
+    } finally {
+      setIncDiffLoadingMap(prev => ({ ...prev, [resource.id]: false }))
     }
   }
 
@@ -942,15 +1252,14 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
   // Eliminada función updateUserStats: ya no se utiliza
 
   const sidebarItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: MdDashboard },
-    { id: 'recursos', label: 'Recursos', icon: MdLibraryBooks },
-    { id: 'ranking', label: 'Ranking', icon: MdLeaderboard }
+    { id: 'dashboard', label: 'Dashboard', icon: MdDashboard, to: '/dashboard' },
+    { id: 'recursos', label: 'Recursos', icon: MdLibraryBooks, to: '/recursos' },
+    { id: 'ranking', label: 'Ranking', icon: MdLeaderboard, to: '/ranking' }
   ]
 
   const renderContent = () => {
-    switch (activeSection) {
-      case 'dashboard':
-        return (
+    // El Dashboard solo muestra su vista principal. "Recursos" y "Ranking" viven en /recursos y /ranking.
+    return (
           <VStack spacing={6} align="stretch">
             {/* Sección de Bienvenida */}
             <Box
@@ -990,8 +1299,19 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
                     size="lg"
                     color="white"
                     borderColor="white"
+                    leftIcon={<Icon as={MdLibraryBooks} />}
+                    onClick={() => navigate('/recursos')}
+                    _hover={{ bg: 'whiteAlpha.200' }}
+                  >
+                    Ver todos
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    color="white"
+                    borderColor="white"
                     leftIcon={<Icon as={FiBookOpen} />}
-                    isDisabled
+                    onClick={() => navigate('/progreso')}
                     _hover={{ bg: 'whiteAlpha.200' }}
                   >
                     Ver Progreso
@@ -1024,7 +1344,7 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
                       <Icon as={FiAward} color="green.500" boxSize={6} />
                       <Text fontWeight="semibold">Puntos Totales</Text>
                     </HStack>
-                    <Text fontSize="2xl" fontWeight="bold">0</Text>
+                    <Text fontSize="2xl" fontWeight="bold">{totalBestPoints}</Text>
                     <Text fontSize="sm" color="gray.600">
                       Puntos acumulados jugando
                     </Text>
@@ -1039,7 +1359,15 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
                       <Icon as={FiClock} color="purple.500" boxSize={6} />
                       <Text fontWeight="semibold">Tiempo de Estudio</Text>
                     </HStack>
-                    <Text fontSize="2xl" fontWeight="bold">0h</Text>
+                    <Text fontSize="2xl" fontWeight="bold">
+                      {(() => {
+                        const secs = totalStudySeconds || 0
+                        const hrs = Math.floor(secs / 3600)
+                        const mins = Math.floor((secs % 3600) / 60)
+                        if (hrs > 0) return `${hrs}h ${mins}m`
+                        return `${mins}m`
+                      })()}
+                    </Text>
                     <Text fontSize="sm" color="gray.600">
                       Tiempo total invertido
                     </Text>
@@ -1048,83 +1376,59 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
               </Card>
             </SimpleGrid>
 
-            {/* Recursos Recientes */}
-            {totalResourcesCount > 0 && (
-              <Box>
-                <HStack justify="space-between" mb={4}>
-                  <Text fontSize="xl" fontWeight="bold">Recursos Recientes</Text>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={() => {
-                      setActiveSection('recursos')
-                      try { window.scrollTo({ top: 0, behavior: 'auto' }) } catch {}
-                    }}
-                  >
-                    Ver todos
-                  </Button>
-                </HStack>
+            {/* Recursos recientes (máximo 6) */}
+            <VStack spacing={3} align="stretch">
+              <HStack justify="space-between">
+                <VStack spacing={0} align="start">
+                  <Text fontSize="xl" fontWeight="bold">Recursos recientes</Text>
+                  <Text color="gray.600">Tus últimos materiales creados o actualizados</Text>
+                </VStack>
+                <Button variant="outline" onClick={() => navigate('/recursos')}>Ver todos</Button>
+              </HStack>
+              {resources.length === 0 ? (
+                loadingResources ? (
+                  <Card bg={cardBg} shadow="sm" borderWidth="1px" borderColor={borderColor}>
+                    <CardBody>
+                      <HStack justify="center" py={8}>
+                        <Spinner />
+                        <Text color="gray.600">Cargando recursos…</Text>
+                      </HStack>
+                    </CardBody>
+                  </Card>
+                ) : (
+                  <Card bg={cardBg} shadow="sm" borderWidth="1px" borderColor={borderColor}>
+                    <CardBody>
+                      <Text color="gray.600">Aún no tienes recursos. Crea tu primer recurso con el botón "Nuevo Recurso".</Text>
+                    </CardBody>
+                  </Card>
+                )
+              ) : (
                 <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
                   {resources.slice(0, 6).map((resource) => (
                     <Card key={resource.id} bg={cardBg} shadow="sm" borderWidth="1px" borderColor={borderColor}>
                       <CardBody>
                         <VStack align="start" spacing={4}>
                           <HStack justify="space-between" w="100%">
-                            <Badge colorScheme={getDifficultyColor(resource.difficulty)}>
-                              {resource.difficulty}
-                            </Badge>
-                            <Text fontSize="sm" color="gray.500">
-                              {formatDate(resource.created_at)}
-                            </Text>
+                            <Badge colorScheme={getDifficultyColor(resource.difficulty)}>{resource.difficulty}</Badge>
+                            <Text fontSize="sm" color="gray.500">{formatDate(resource.created_at)}</Text>
                           </HStack>
                           <VStack align="start" spacing={2} w="100%">
-                            <Text fontWeight="bold" fontSize="lg" noOfLines={2} minH="48px">
-                              {resource.title}
-                            </Text>
-                            <Text fontSize="sm" color="gray.600">
-                              {resource.subject} • {resource.topic}
-                            </Text>
+                            <Text fontWeight="bold" fontSize="lg" noOfLines={2} minH="48px">{resource.title}</Text>
+                            <Text fontSize="sm" color="gray.600">{resource.subject} • {resource.topic}</Text>
                             <HStack justify="space-between" w="100%">
                               <Text fontSize="sm" color="gray.700">Progreso: {resourceProgressMap[resource.id] ?? 0}%</Text>
                               <Text fontSize="sm" color="gray.700">Puntuación: {(resourceScoreMap[resource.id] ?? 0)}/100</Text>
                             </HStack>
-                            <Progress value={resourceProgressMap[resource.id] ?? 0} size="sm" colorScheme="blue" w="100%" />
+                            <Progress value={resourceProgressMap[resource.id] ?? 0} size="sm" colorScheme="blue" w="100%" borderRadius="md" />
                           </VStack>
-
                           <VStack spacing={2} w="100%">
-                            <Button
-                              colorScheme="blue"
-                              leftIcon={<Icon as={FiPlay} />}
-                              onClick={() => handlePlayResource(resource)}
-                              isDisabled={(resourceProgressMap[resource.id] ?? 0) >= 100 || completedResourceIds.has(resource.id)}
-                              w="100%"
-                            >
-                              {(() => {
-                                const prog = resourceProgressMap[resource.id] ?? 0
-                                return prog > 0 && prog < 100 ? 'Reanudar' : 'Comenzar'
-                              })()}
-                            </Button>
                             <HStack spacing={2} w="100%">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                leftIcon={<Icon as={FiRefreshCw} />}
-                                flex={1}
-                              isDisabled={!(activeResourceIds.has(resource.id) || completedResourceIds.has(resource.id))}
-                              isLoading={startingNewAttempt}
-                              onClick={() => handlePlayResource(resource, { forceNewSession: true })}
-                              >
-                                Reintentar
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                leftIcon={<Icon as={FiBookOpen} />}
-                                flex={1}
-                                onClick={() => handleReviewResource(resource)}
-                              >
-                                Revisar
-                              </Button>
+                              <Button size="sm" colorScheme="blue" flex={1} onClick={() => handlePlayResource(resource)} isDisabled={startedResourceIds.has(resource.id) || (hasAttemptMap[resource.id] && !postIncreaseLockMap[resource.id])}>Comenzar</Button>
+                              <Button size="sm" variant="outline" leftIcon={<Icon as={FiBookOpen} />} flex={1} onClick={() => handleReviewResource(resource)}>Revisar</Button>
+                            </HStack>
+                            <HStack spacing={2} w="100%">
+                              <Button size="sm" variant="outline" flex={1} onClick={() => handlePlayResource(resource, { forceNewSession: true })} isDisabled={!!postIncreaseLockMap[resource.id]}>Reintentar</Button>
+                              <Button size="sm" variant="outline" colorScheme="purple" flex={1} onClick={() => handleIncreaseDifficulty(resource)} isDisabled={resource.difficulty === 'Avanzado'} isLoading={!!incDiffLoadingMap[resource.id]}>Aumentar dificultad</Button>
                             </HStack>
                           </VStack>
                         </VStack>
@@ -1132,238 +1436,10 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
                     </Card>
                   ))}
                 </SimpleGrid>
-              </Box>
-            )}
-          </VStack>
-        )
-      
-      case 'recursos':
-        return (
-          <VStack spacing={6} align="stretch">
-            <HStack justify="space-between">
-              <Box>
-                <Text fontSize="2xl" fontWeight="bold">Mis Recursos</Text>
-                <Text color="gray.600">Gestiona tus materiales de estudio</Text>
-              </Box>
-              <Button 
-                bg="black"
-                color="white"
-                _hover={{ bg: "gray.800" }}
-                leftIcon={<Icon as={FiPlus} />} 
-                onClick={onOpen}
-              >
-                Nuevo Recurso
-              </Button>
-            </HStack>
-            
-            {/* La revisión por intentos ahora se muestra en una página dedicada (/review/:resourceId) */}
-            {loadingResources ? (
-              <Card bg={cardBg} shadow="sm" borderWidth="1px" borderColor={borderColor}>
-                <CardBody>
-                  <VStack spacing={4} py={8}>
-                    <Spinner size="xl" color="blue.500" />
-                    <Text fontSize="lg" color="gray.600">
-                      Cargando recursos...
-                    </Text>
-                  </VStack>
-                </CardBody>
-              </Card>
-            ) : resourcesError ? (
-              <Alert status="error">
-                <AlertIcon />
-                {resourcesError}
-              </Alert>
-            ) : totalResourcesCount === 0 ? (
-              <Card bg={cardBg} shadow="sm" borderWidth="1px" borderColor={borderColor}>
-                <CardBody>
-                  <VStack spacing={4} py={8}>
-                    <Icon as={FiBook} boxSize={12} color="gray.400" />
-                    <Text fontSize="lg" color="gray.600">
-                      Aún no tienes recursos creados
-                    </Text>
-                    <Text color="gray.500" textAlign="center">
-                      Crea tu primer recurso educativo personalizado
-                    </Text>
-                    <Button 
-                      bg="black"
-                      color="white"
-                      _hover={{ bg: "gray.800" }}
-                      leftIcon={<Icon as={FiPlus} />}
-                      onClick={onOpen}
-                    >
-                      Crear Primer Recurso
-                    </Button>
-                  </VStack>
-                </CardBody>
-              </Card>
-            ) : (
-              <>
-              <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
-                {resources.map((resource) => (
-                  <Card key={resource.id} bg={cardBg} shadow="sm" borderWidth="1px" borderColor={borderColor}>
-                    <CardBody>
-                      <VStack align="start" spacing={4}>
-                        <HStack justify="space-between" w="100%">
-                          <Badge colorScheme={getDifficultyColor(resource.difficulty)}>
-                            {resource.difficulty}
-                          </Badge>
-                          <Text fontSize="sm" color="gray.500">
-                            {formatDate(resource.created_at)}
-                          </Text>
-                        </HStack>
-                        
-                        <VStack align="start" spacing={2} w="100%">
-                          <Text fontWeight="bold" fontSize="lg" noOfLines={2} minH="48px">
-                            {resource.title}
-                          </Text>
-                          <Text fontSize="sm" color="gray.600">
-                            {resource.subject} • {resource.topic}
-                          </Text>
-                          <HStack justify="space-between" w="100%">
-                            <Text fontSize="sm" color="gray.700">Progreso: {resourceProgressMap[resource.id] ?? 0}%</Text>
-                            <Text fontSize="sm" color="gray.700">Puntuación: {(resourceScoreMap[resource.id] ?? 0)}/100</Text>
-                          </HStack>
-                          <Progress value={resourceProgressMap[resource.id] ?? 0} size="sm" colorScheme="blue" w="100%" />
-                        </VStack>
-
-                        <VStack spacing={2} w="100%">
-                          <Button
-                            colorScheme="blue"
-                            leftIcon={<Icon as={FiPlay} />}
-                            onClick={() => handlePlayResource(resource)}
-                            isDisabled={(resourceProgressMap[resource.id] ?? 0) >= 100 || completedResourceIds.has(resource.id)}
-                            w="100%"
-                          >
-                            {(() => {
-                              const prog = resourceProgressMap[resource.id] ?? 0
-                              return prog > 0 && prog < 100 ? 'Reanudar' : 'Comenzar'
-                            })()}
-                          </Button>
-                          <HStack spacing={2} w="100%">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              leftIcon={<Icon as={FiRefreshCw} />}
-                              flex={1}
-                              isDisabled={!(activeResourceIds.has(resource.id) || completedResourceIds.has(resource.id))}
-                              isLoading={startingNewAttempt}
-                              onClick={() => handlePlayResource(resource, { forceNewSession: true })}
-                            >
-                              Reintentar
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              leftIcon={<Icon as={FiBookOpen} />}
-                              flex={1}
-                              onClick={() => handleReviewResource(resource)}
-                            >
-                              Revisar
-                            </Button>
-                          </HStack>
-                        </VStack>
-
-                        {/* Se eliminó la visualización de juegos seleccionados para simplificar el formato del recurso */}
-                      </VStack>
-                    </CardBody>
-                  </Card>
-                ))}
-              </SimpleGrid>
-              {/* Controles de paginación */}
-              {totalResourcesCount > 0 && (
-                <HStack justify="space-between" align="center" mt={4}>
-                  <Button
-                    variant="outline"
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    isDisabled={currentPage <= 1}
-                  >
-                    Anterior
-                  </Button>
-                  <Text color="gray.600">
-                    Página {currentPage} de {Math.max(1, Math.ceil(totalResourcesCount / pageSize))}
-                  </Text>
-                  <Button
-                    variant="outline"
-                    onClick={() => setCurrentPage(p => Math.min(Math.max(1, Math.ceil(totalResourcesCount / pageSize)), p + 1))}
-                    isDisabled={currentPage >= Math.max(1, Math.ceil(totalResourcesCount / pageSize))}
-                  >
-                    Siguiente
-                  </Button>
-                </HStack>
               )}
-              </>
-            )}
+            </VStack>
           </VStack>
         )
-
-      case 'ranking':
-        return (
-          <VStack spacing={6} align="stretch">
-            <Box>
-              <Text fontSize="2xl" fontWeight="bold">Ranking Global</Text>
-              <Text color="gray.600">Compite con otros estudiantes</Text>
-              <Text color="gray.500" fontSize="sm">El "Total" corresponde a la suma de tus puntajes finales por recurso (último intento).</Text>
-            </Box>
-            
-            <Card bg={cardBg} shadow="sm" borderWidth="1px" borderColor={borderColor}>
-              <CardBody>
-                {loadingRanking ? (
-                  <HStack justify="center" py={8}><Spinner /></HStack>
-                ) : rankingError ? (
-                  <VStack spacing={2} py={6}>
-                    <Text color="red.500">{rankingError}</Text>
-                    <Text color="gray.500" fontSize="sm">Intenta nuevamente más tarde.</Text>
-                  </VStack>
-                ) : ranking.length === 0 ? (
-                  <VStack spacing={4} py={8}>
-                    <Icon as={FiTrendingUp} boxSize={12} color="gray.400" />
-                    <Text fontSize="lg" color="gray.600">Aún no hay datos de ranking</Text>
-                    <Text color="gray.500" textAlign="center">Completa recursos para sumar puntos y aparecer en el ranking</Text>
-                  </VStack>
-                ) : (
-                  <VStack spacing={3} align="stretch">
-                    {ranking.map((entry, idx) => {
-                      const position = idx + 1
-                      const isTop3 = position <= 3
-                      const isCurrentUser = entry.user_id === user?.id
-                      const trophyColor = position === 1 ? '#DAA520' : position === 2 ? '#C0C0C0' : position === 3 ? '#CD7F32' : undefined
-                      const bg = isTop3 ? (position === 1 ? 'yellow.50' : position === 2 ? 'gray.50' : 'orange.50') : 'transparent'
-                      const displayName = (() => {
-                        if (isCurrentUser) {
-                          const firstName = user?.user_metadata?.first_name || user?.email?.split('@')[0] || 'Yo'
-                          const lastName = user?.user_metadata?.last_name || ''
-                          return `${firstName}${lastName ? ' ' + lastName : ''}`
-                        }
-                        // Fallback: mostrar parte del user_id
-                        const uid = entry.user_id
-                        return `Usuario ${uid.slice(0, 4)}…${uid.slice(-4)}`
-                      })()
-                      return (
-                        <HStack key={entry.user_id} spacing={4} p={3} borderRadius="md" bg={bg} borderWidth={isTop3 ? '1px' : '0'} borderColor={borderColor}>
-                          <HStack minW="80px" w="80px">
-                            <Badge colorScheme="blue" fontSize="md">{position}°</Badge>
-                            {isTop3 && <Icon as={FiAward} color={trophyColor} />}
-                          </HStack>
-                          <HStack justify="space-between" flex={1}>
-                            <Text fontWeight={isTop3 ? 'semibold' : 'normal'} color={isCurrentUser ? 'blue.600' : undefined}>{displayName}</Text>
-                            <HStack>
-                              <Badge colorScheme={isTop3 ? 'purple' : 'gray'}>Total</Badge>
-                              <Text fontWeight="bold">{entry.total_score}</Text>
-                            </HStack>
-                          </HStack>
-                        </HStack>
-                      )
-                    })}
-                  </VStack>
-                )}
-              </CardBody>
-            </Card>
-          </VStack>
-        )
-      
-      default:
-        return null
-    }
   }
 
   // Vista H5P eliminada
@@ -1474,18 +1550,18 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
                 py={3}
                 borderRadius="lg"
                 cursor="pointer"
-                bg={activeSection === item.id ? 'black' : 'transparent'}
-                color={activeSection === item.id ? 'white' : 'gray.600'}
-                _hover={{ bg: activeSection === item.id ? 'black' : 'gray.100' }}
+                bg={(location?.pathname === item.to) ? 'black' : 'transparent'}
+                color={(location?.pathname === item.to) ? 'white' : 'gray.600'}
+                _hover={{ bg: (location?.pathname === item.to) ? 'black' : 'gray.100' }}
                 transition="all 0.2s"
                 onClick={() => {
-                  setActiveSection(item.id)
                   try { window.scrollTo({ top: 0, behavior: 'auto' }) } catch {}
+                  try { navigate(item.to || '/dashboard') } catch {}
                 }}
                 w="full"
               >
                 <Icon as={item.icon} boxSize={5} />
-                <Text fontSize="sm" fontWeight={activeSection === item.id ? 'semibold' : 'medium'}>
+                <Text fontSize="sm" fontWeight={(location?.pathname === item.to) ? 'semibold' : 'medium'}>
                   {item.label}
                 </Text>
               </Flex>
@@ -1499,15 +1575,17 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
             <VStack align="stretch" spacing={4}>
               <HStack justify="space-between">
                 <Text fontSize="2xl" fontWeight="bold">{playingTitle}</Text>
-                <Button 
-                  variant="outline" 
-                  onClick={() => {
-                    // Mostrar advertencia de salida: se perderá lo avanzado
-                    onExitOpen()
-                  }}
-                >
-                  Volver
-                </Button>
+                {matchUpStage !== 'summary' && (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      // Mostrar advertencia de salida: se perderá lo avanzado
+                      onExitOpen()
+                    }}
+                  >
+                    Volver
+                  </Button>
+                )}
               </HStack>
               {/* HUD: Tiempo, Progreso y Calificación visible para todos los elementos */}
               <VStack align="stretch" spacing={2}>
@@ -1781,24 +1859,25 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
                         key={`mnprac-${currentAttemptId ?? 'noattempt'}-${playingResourceId ?? 'nores'}`}
                         content={(playingStudyElements[studyIndex]?.content as any)}
                         mnemonicText={mnemonicDraft || mnemonicAuto}
-                        onComplete={(_results, score) => {
+                        onComplete={(results, score) => {
                           // resultados disponibles en 'results' si se requiere mostrar un resumen más adelante
+                          setMnemonicPracticeResults(results)
                           setMnemonicPracticeCompleted(true)
                           if (user?.id && playingResourceId) {
                             saveResourceProgress(user.id, playingResourceId, { stage: 'mnemonic_practice', mnemonicPracticeCompleted: true })
                           }
                           toast({ title: 'Práctica de mnemotecnia', description: `Tu puntuación: ${score}/100`, status: 'success', duration: 3000 })
                         }}
+                        renderContinueButton={
+                          <Button colorScheme="blue" onClick={() => {
+                            // Continuar al siguiente elemento de juego
+                            setMatchUpStage(playingQuiz ? 'quiz' : 'lines')
+                            if (user?.id && playingResourceId) {
+                              saveResourceProgress(user.id, playingResourceId, { stage: playingQuiz ? 'quiz' : 'lines', mnemonicPracticeConfirmed: true })
+                            }
+                          }} isDisabled={!mnemonicPracticeCompleted}>Continuar</Button>
+                        }
                       />
-                      <HStack mt={4} justify="flex-end">
-                        <Button colorScheme="blue" onClick={() => {
-                          // Continuar al siguiente elemento de juego
-                          setMatchUpStage(playingQuiz ? 'quiz' : 'lines')
-                          if (user?.id && playingResourceId) {
-                            saveResourceProgress(user.id, playingResourceId, { stage: playingQuiz ? 'quiz' : 'lines' })
-                          }
-                        }} isDisabled={!mnemonicPracticeCompleted}>Continuar</Button>
-                      </HStack>
                     </>
                   )}
                   {matchUpStage === 'quiz_summary' && (
@@ -2008,7 +2087,13 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
                           }
                           setMatchUpStage(nextStage as any)
                           if (user?.id && playingResourceId) {
-                            saveResourceProgress(user.id, playingResourceId, { stage: nextStage as any })
+                            // Marcar confirmación de puntaje para este juego cuando el usuario completa (sin omitir)
+                            // Esto garantiza que la puntuación de "Cada oveja con su pareja" se asigne correctamente.
+                            saveResourceProgress(
+                              user.id,
+                              playingResourceId,
+                              omitted ? { stage: nextStage as any } : { stage: nextStage as any, findTheMatchConfirmed: true }
+                            )
                             if (!omitted && nextStage === 'summary') {
                               setCompletedResourceIds(prev => new Set([...prev, playingResourceId]))
                             }
@@ -2235,7 +2320,7 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
                         </VStack>
                       )}
                       <VStack align="stretch" spacing={2}>
-                        <Text fontWeight="semibold">Emparejamientos (líneas)</Text>
+            <Text fontWeight="semibold">Unir parejas</Text>
                         {linesResults.map((r, idx) => (
                           <Box key={`sum-line-${idx}`} p={2} borderWidth="1px" borderRadius="md" borderColor={r.correct ? 'green.300' : 'red.300'} bg={r.correct ? 'green.50' : 'red.50'}>
                             <Text fontSize="sm"><strong>{r.term}</strong> → {r.chosen || 'Sin respuesta'}</Text>
@@ -2270,14 +2355,23 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
                             try { await completeAttempt(currentAttemptId) } catch {}
                             setCurrentAttemptId(null)
                           }
+                          // Marcar que ya existe al menos un intento para este recurso
+                          if (playingResourceId) {
+                            setHasAttemptMap(prev => ({ ...prev, [playingResourceId]: true }))
+                          }
                           // No limpiar progreso para mantener estado de "completado" en Mis Recursos
                           setPlayingMatchUp(null); 
                           setPlayingStudyElements(null); 
                           setMatchUpStage(null); 
                           setLinesCompleted(false); 
                           setLinesResults([]); 
-                          setActiveSection('recursos')
+                          // Se eliminó cambio de sección; solo limpiar estados locales
                           try { window.scrollTo({ top: 0, behavior: 'auto' }) } catch {}
+                          // Desbloquear acciones post-increase tras finalizar/salir del intento
+                          setPostIncreaseLockMap(prev => (playingResourceId && prev[playingResourceId] ? { ...prev, [playingResourceId]: false } : prev))
+                          // Recargar el Dashboard para reflejar cambios y limpiar estados visuales
+                          try { navigate('/dashboard', { replace: true }) } catch {}
+                          try { window.location.reload() } catch {}
                         }}>Salir</Button>
                         <Button variant="outline" isLoading={startingNewAttempt} onClick={async () => {
                           // Reiniciar completamente desde cero forzando nueva sesión y nuevo intento
@@ -2303,6 +2397,64 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
         isOpen={isOpen} 
         onClose={handleResourceModalClose}
       />
+
+      {/* Modal de Revisar Intentos */}
+      <Modal isOpen={isAttemptsOpen} onClose={onAttemptsClose} size="lg">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>
+            {reviewResource ? `Intentos — ${reviewResource.title}` : 'Intentos del recurso'}
+          </ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            {loadingAttempts ? (
+              <HStack justify="center" py={8}>
+                <Spinner />
+                <Text>Cargando intentos…</Text>
+              </HStack>
+            ) : attemptsForReview.length > 0 ? (
+              <Table size="sm" variant="simple">
+                <Thead>
+                  <Tr>
+                    <Th>Número de intento</Th>
+                    <Th isNumeric>Calificación</Th>
+                  </Tr>
+                </Thead>
+                <Tbody>
+                  {attemptsForReview.map((a) => (
+                    <Tr key={`att-${a.attempt_number}`}>
+                      <Td>#{a.attempt_number}</Td>
+                      <Td isNumeric>{typeof a.final_score === 'number' ? `${a.final_score.toFixed(1)}%` : '—'}</Td>
+                    </Tr>
+                  ))}
+                </Tbody>
+              </Table>
+            ) : (
+              <Alert status="info" borderRadius="md">
+                <AlertIcon />
+                Aún no hay intentos registrados para este recurso.
+              </Alert>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <HStack spacing={3}>
+              <Button
+                colorScheme="blue"
+                onClick={async () => {
+                  if (reviewResource) {
+                    await handlePlayResource(reviewResource, { forceNewSession: true })
+                    onAttemptsClose()
+                  }
+                }}
+                isDisabled={!reviewResource}
+              >
+                Reintentar
+              </Button>
+              <Button variant="ghost" onClick={onAttemptsClose}>Salir</Button>
+            </HStack>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
 
       {/* Confirmación de salida del recurso (descartar solo elemento actual) */}
       <AlertDialog isOpen={isExitOpen} leastDestructiveRef={exitCancelRef} onClose={onExitClose}>
@@ -2370,7 +2522,13 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
                   setMatchUpStage(null)
                   setLinesCompleted(false)
                   setLinesResults([])
-                  setActiveSection('recursos')
+                  // Habilitar Reintentar tras salir del intento
+                  if (playingResourceId) {
+                    setHasAttemptMap(prev => ({ ...prev, [playingResourceId]: true }))
+                  }
+                  // Desbloquear acciones post-increase tras salir del intento
+                  setPostIncreaseLockMap(prev => (playingResourceId && prev[playingResourceId] ? { ...prev, [playingResourceId]: false } : prev))
+                  // Se eliminó cambio de sección al salir
                   try { window.scrollTo({ top: 0, behavior: 'auto' }) } catch {}
                 } finally {
                   onExitClose()

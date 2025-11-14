@@ -129,3 +129,69 @@ export async function getAttemptsForResource(
   const count = await getAttemptCount(resourceId, userId)
   return Array.from({ length: count }, (_, i) => ({ attempt_number: i + 1, final_score: null }))
 }
+
+/**
+ * Obtiene el mejor puntaje (máximo final_score) por recurso para un usuario
+ * Devuelve un mapa: { [resource_id]: max_score }
+ */
+export async function getUserBestScores(
+  userId: string
+): Promise<Record<string, number>> {
+  const supa = await isSupabaseAvailable()
+  if (supa) {
+    try {
+      const { data, error } = await supabase
+        .from('educational_resource_attempts')
+        .select('resource_id, final_score')
+        .eq('user_id', userId)
+      if (error) throw error
+      const best: Record<string, number> = {}
+      for (const row of data || []) {
+        const rid = (row as any).resource_id as string
+        const score = ((row as any).final_score as number | null) ?? null
+        if (score != null) {
+          best[rid] = Math.max(best[rid] ?? 0, Math.round(score))
+        }
+      }
+      return best
+    } catch (e) {
+      console.warn('No se pudieron obtener los mejores puntajes del usuario:', e)
+      return {}
+    }
+  }
+  // Fallback local: no hay tabla de intentos local con puntajes por intento;
+  // se intentará leer de localStorage claves final_score_{userId}_{resourceId} por llamada de la UI.
+  return {}
+}
+
+/**
+ * Suma el tiempo (en segundos) que tardó el usuario en completar cada intento
+ * (solo intentos con completed_at no nulo). Calculado como completed_at - started_at
+ */
+export async function getUserTotalCompletedAttemptSeconds(userId: string): Promise<number> {
+  const supa = await isSupabaseAvailable()
+  if (!supa) return 0
+  try {
+    const { data, error } = await supabase
+      .from('educational_resource_attempts')
+      .select('started_at, completed_at')
+      .eq('user_id', userId)
+      .not('completed_at', 'is', null)
+
+    if (error) throw error
+
+    let total = 0
+    for (const row of (data || [])) {
+      try {
+        const started = new Date((row as any).started_at)
+        const completed = new Date((row as any).completed_at)
+        const diff = Math.max(0, Math.floor((completed.getTime() - started.getTime()) / 1000))
+        if (!isNaN(diff)) total += diff
+      } catch {}
+    }
+    return total
+  } catch (e) {
+    console.warn('No se pudo calcular el tiempo total por intentos completados:', e)
+    return 0
+  }
+}

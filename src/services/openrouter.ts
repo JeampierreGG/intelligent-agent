@@ -125,6 +125,31 @@ const ensureMinOpenBoxItems = (otb: OpenTheBoxContent): OpenTheBoxContent => {
   return { ...otb, items: padded }
 }
 
+// Normaliza Find the Match para que tenga EXACTAMENTE 6 pares ÚNICOS (concept y affirmation únicos).
+// - Elimina duplicados por concepto y por affirmation.
+// - Si hay más de 6, recorta a 6.
+// - Si hay menos de 6, NO rellena con duplicados (se intentará una segunda solicitud para completar).
+const ensureExactlySixUniqueFindTheMatchPairs = (ftm: FindTheMatchContent): FindTheMatchContent => {
+  const raw = Array.isArray(ftm.pairs) ? ftm.pairs : []
+  const concepts = new Set<string>()
+  const affirmations = new Set<string>()
+  const unique: typeof raw = []
+  for (const p of raw) {
+    if (!p || typeof p.concept !== 'string' || typeof p.affirmation !== 'string') continue
+    const c = p.concept.trim()
+    const a = p.affirmation.trim()
+    if (!c || !a) continue
+    const keyC = c.toLowerCase()
+    const keyA = a.toLowerCase()
+    if (concepts.has(keyC) || affirmations.has(keyA)) continue
+    concepts.add(keyC)
+    affirmations.add(keyA)
+    unique.push({ concept: c, affirmation: a })
+    if (unique.length === 6) break
+  }
+  return { ...ftm, pairs: unique.slice(0, 6) }
+}
+
 // DEPRECATED: generación integrada (timeline + múltiples juegos). Mantener solo para compatibilidad.
 // No agrega imágenes ni campos relacionados a imágenes.
 export async function generateMatchUpResource(formData: ResourceFormData): Promise<GeneratedResource> {
@@ -253,7 +278,7 @@ export async function generateMatchUpResource(formData: ResourceFormData): Promi
 
   const generated: GeneratedResource = {
     title: parsed.title || `${formData.subject}: ${formData.topic}`,
-    summary: `Actividad Match up (líneas e imágenes) sobre ${formData.topic} en ${formData.subject}`,
+  summary: `Actividad “Unir parejas” (líneas) sobre ${formData.topic} en ${formData.subject}`,
     difficulty: parsed.difficulty || 'Intermedio',
     gameelement: gameBundle,
     matchUp: gameBundle.matchUp,
@@ -529,66 +554,153 @@ export async function generateGameElementsOnly(formData: ResourceFormData, selec
   const wantOpenTheBox = selectedGameKeys.includes('open_the_box')
   const wantFindTheMatch = selectedGameKeys.includes('find_the_match')
 
-  const gameParts: string[] = []
-  if (wantMatchUp) gameParts.push(`"matchUp": { "templateType": "match_up", "title": "...", "linesMode": { "pairs": [ { "left": "concepto", "right": "definición breve y rigurosa" } ] } }`)
-  if (wantQuiz) gameParts.push(`"quiz": { "templateType": "quiz", "title": "...", "questions": [ { "prompt": "pregunta clara y específica", "options": ["A","B","C","D"], "correctIndex": 0, "explanation": "razón breve y correcta" } ] }`)
-  if (wantGroupSort) gameParts.push(`"groupSort": { "templateType": "group_sort", "title": "...", "groups": [ { "name": "Categoría A", "items": ["x","y"] }, { "name": "Categoría B", "items": ["z"] } ] }`)
-  if (wantAnagram) gameParts.push(`"anagram": { "templateType": "anagram", "title": "...", "items": [ { "clue": "pista conceptual", "answer": "término", "scrambled": "letras desordenadas" } ] }`)
-  if (wantOpenTheBox) gameParts.push(`"openTheBox": { "templateType": "open_the_box", "title": "...", "items": [ { "question": "...", "options": ["A","B","C","D"], "correctIndex": 0, "explanation": "razón breve y correcta" } ] }`)
-  if (wantFindTheMatch) gameParts.push(`"findTheMatch": { "templateType": "find_the_match", "title": "...", "pairs": [ { "concept": "...", "affirmation": "definición o afirmación correcta" } ] }`)
+  // Nota: La construcción del prompt dinámico se realiza abajo en requestParsed(keys).
 
-  const structureJson = `{
-  ${gameParts.join(',\n  ')}
+  // Helper para llamar al endpoint y obtener JSON parseado
+  const requestParsed = async (keys: string[]) => {
+    const wantMU = keys.includes('match_up')
+    const wantQZ = keys.includes('quiz')
+    const wantGS = keys.includes('group_sort')
+    const wantAG = keys.includes('anagram')
+    const wantOTB = keys.includes('open_the_box')
+    const wantFTM = keys.includes('find_the_match')
+
+    const parts: string[] = []
+    if (wantMU) parts.push(`"matchUp": { "templateType": "match_up", "title": "...", "linesMode": { "pairs": [ { "left": "concepto", "right": "definición breve y rigurosa" } ] } }`)
+    if (wantQZ) parts.push(`"quiz": { "templateType": "quiz", "title": "...", "questions": [ { "prompt": "pregunta clara y específica", "options": ["A","B","C","D"], "correctIndex": 0, "explanation": "razón breve y correcta" } ] }`)
+    if (wantGS) parts.push(`"groupSort": { "templateType": "group_sort", "title": "...", "groups": [ { "name": "Categoría A", "items": ["x","y"] }, { "name": "Categoría B", "items": ["z"] } ] }`)
+    if (wantAG) parts.push(`"anagram": { "templateType": "anagram", "title": "...", "items": [ { "clue": "pista conceptual", "answer": "término", "scrambled": "letras desordenadas" } ] }`)
+    if (wantOTB) parts.push(`"openTheBox": { "templateType": "open_the_box", "title": "...", "items": [ { "question": "...", "options": ["A","B","C","D"], "correctIndex": 0, "explanation": "razón breve y correcta" } ] }`)
+    if (wantFTM) parts.push(`"findTheMatch": { "templateType": "find_the_match", "title": "...", "pairs": [ { "concept": "...", "affirmation": "definición o afirmación correcta" } ] }`)
+
+    const struct = `{
+  ${parts.join(',\n  ')}
 }`
 
-  const prompt = `Genera SOLO JSON válido en español con ELEMENTOS DE JUEGO seleccionados para el tema ${subjectText}/${topicText}:
-${structureJson}
+    const subPrompt = `Genera SOLO JSON válido en español con TODOS los ELEMENTOS DE JUEGO SOLICITADOS para el tema ${subjectText}/${topicText}:
+${struct}
 Requisitos estrictos:
 - Cada elemento debe aportar aprendizaje real (evitar trivialidades y redundancias).
-- Genera entre 6 y 12 ítems por elemento seleccionado.
+- Genera entre 6 y 12 ítems por elemento solicitado.
 - Las explicaciones deben ser breves, claras y correctas; usar terminología apropiada.
 - No incluyas claves para elementos NO solicitados.
 - No incluyas campos de imágenes (imageUrl, imageDescription, background_image_url) ni URLs de imágenes.
+- Para findTheMatch: EXACTAMENTE 6 pares. No repitas conceptos ni afirmaciones; cada afirmación debe ser única.
+- Debes INCLUIR TODAS las llaves presentes en la estructura anterior. No omitas ninguna.
+- Para cada bloque, agrega el campo templateType con exactamente estos valores:
+  - matchUp.templateType = "match_up"
+  - quiz.templateType = "quiz"
+  - groupSort.templateType = "group_sort"
+  - anagram.templateType = "anagram"
+  - openTheBox.templateType = "open_the_box"
+  - findTheMatch.templateType = "find_the_match"
 - Responde ÚNICAMENTE con el JSON, sin texto adicional ni Markdown.`
 
-  const body = {
-    model: 'openai/gpt-4o-mini',
-    messages: [
-      { role: 'system', content: 'Responde SOLO con JSON válido. Sin texto fuera del JSON.' },
-      { role: 'user', content: prompt },
-    ],
-    temperature: 0.7,
+    const body = {
+      model: 'openai/gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'Responde SOLO con JSON válido. Sin texto fuera del JSON.' },
+        { role: 'user', content: subPrompt },
+      ],
+      temperature: 0.7,
+    }
+
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify(body)
+    })
+    if (!resp.ok) throw new Error('Error al generar elementos de juego en OpenRouter')
+
+    const data = await resp.json()
+    const content = data?.choices?.[0]?.message?.content || ''
+    const match = content.match(/\{[\s\S]*\}/)
+    const jsonText = match ? match[0] : content
+    return JSON.parse(jsonText)
   }
 
-  const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify(body)
-  })
-  if (!resp.ok) throw new Error('Error al generar elementos de juego en OpenRouter')
-
-  const data = await resp.json()
-  const content = data?.choices?.[0]?.message?.content || ''
-  const match = content.match(/\{[\s\S]*\}/)
-  const jsonText = match ? match[0] : content
-  const parsed: any = JSON.parse(jsonText)
+  // Primera solicitud para todas las llaves seleccionadas
+  const parsed1 = await requestParsed(selectedGameKeys)
 
   let bundle: GameElementBundle = {}
-  if (selectedGameKeys.includes('match_up') && parsed?.matchUp?.templateType === 'match_up') {
-    bundle.matchUp = parsed.matchUp as MatchUpContent
+
+  // Función de fusión relajada: acepta bloques aunque falte templateType si la forma es válida
+  const acceptBlocks = (parsed: any) => {
+    if (selectedGameKeys.includes('match_up')) {
+      const mu = parsed?.matchUp
+      const valid = mu?.linesMode?.pairs && mu.linesMode.pairs.length > 0
+      if (valid) bundle.matchUp = { templateType: 'match_up', title: mu.title || 'Unir parejas', linesMode: mu.linesMode } as MatchUpContent
+    }
+    if (selectedGameKeys.includes('quiz')) {
+      const qz = parsed?.quiz
+      const valid = Array.isArray(qz?.questions) && qz.questions.length > 0
+      if (valid) bundle.quiz = { ...(qz as QuizContent), templateType: 'quiz' }
+    }
+    if (selectedGameKeys.includes('group_sort')) {
+      const gs = parsed?.groupSort
+      const valid = Array.isArray(gs?.groups) && gs.groups.length > 0
+      if (valid) bundle.groupSort = { ...(gs as GroupSortContent), templateType: 'group_sort' }
+    }
+    if (selectedGameKeys.includes('anagram')) {
+      const ag = parsed?.anagram
+      const valid = Array.isArray(ag?.items) && ag.items.length > 0
+      if (valid) bundle.anagram = { ...(ag as AnagramContent), templateType: 'anagram' }
+    }
+    if (selectedGameKeys.includes('open_the_box')) {
+      const otb = parsed?.openTheBox
+      const valid = Array.isArray(otb?.items) && otb.items.length > 0
+      if (valid) bundle.openTheBox = ensureMinOpenBoxItems({ ...(otb as OpenTheBoxContent), templateType: 'open_the_box' })
+    }
+    if (selectedGameKeys.includes('find_the_match')) {
+      const ftm = parsed?.findTheMatch
+      const valid = Array.isArray(ftm?.pairs) && ftm.pairs.length > 0
+      if (valid) bundle.findTheMatch = ensureExactlySixUniqueFindTheMatchPairs({ ...(ftm as FindTheMatchContent), templateType: 'find_the_match' })
+    }
   }
-  if (selectedGameKeys.includes('quiz') && parsed?.quiz?.templateType === 'quiz') {
-    bundle.quiz = parsed.quiz as QuizContent
+
+  acceptBlocks(parsed1)
+
+  // Intento de completar pares únicos para Find the Match si quedaron menos de 6
+  if (selectedGameKeys.includes('find_the_match') && bundle.findTheMatch) {
+    const currentCount = Array.isArray(bundle.findTheMatch.pairs) ? bundle.findTheMatch.pairs.length : 0
+    if (currentCount < 6) {
+      try {
+        const parsedExtra = await requestParsed(['find_the_match'])
+        const ftm2 = parsedExtra?.findTheMatch
+        if (Array.isArray(ftm2?.pairs) && ftm2.pairs.length > 0) {
+          const merged = ensureExactlySixUniqueFindTheMatchPairs({
+            ...(bundle.findTheMatch as FindTheMatchContent),
+            pairs: [ ...(bundle.findTheMatch.pairs || []), ...ftm2.pairs ],
+          })
+          bundle.findTheMatch = { ...merged, templateType: 'find_the_match' }
+        }
+      } catch (e) {
+        console.warn('No se pudieron completar pares únicos de Find the Match en primer intento:', e)
+      }
+    }
   }
-  if (selectedGameKeys.includes('group_sort') && parsed?.groupSort?.templateType === 'group_sort') {
-    bundle.groupSort = parsed.groupSort as GroupSortContent
+
+  // Reintento para llaves faltantes (una sola vez)
+  const missing = selectedGameKeys.filter(k => {
+    if (k === 'match_up') return !bundle.matchUp
+    if (k === 'quiz') return !bundle.quiz
+    if (k === 'group_sort') return !bundle.groupSort
+    if (k === 'anagram') return !bundle.anagram
+    if (k === 'open_the_box') return !bundle.openTheBox
+    if (k === 'find_the_match') return !bundle.findTheMatch
+    return false
+  })
+
+  if (missing.length > 0) {
+    try {
+      const parsed2 = await requestParsed(missing)
+      acceptBlocks(parsed2)
+    } catch (e) {
+      console.warn('Reintento de elementos de juego faltantes falló:', e)
+    }
   }
-  if (selectedGameKeys.includes('anagram') && parsed?.anagram?.templateType === 'anagram') {
-    bundle.anagram = parsed.anagram as AnagramContent
-  }
-  if (selectedGameKeys.includes('open_the_box') && parsed?.openTheBox?.templateType === 'open_the_box') {
-    bundle.openTheBox = ensureMinOpenBoxItems(parsed.openTheBox as OpenTheBoxContent)
-  }
-  if (selectedGameKeys.includes('find_the_match') && parsed?.findTheMatch?.templateType === 'find_the_match') {
-    bundle.findTheMatch = parsed.findTheMatch as FindTheMatchContent
+
+  // Normalización final: asegurar exactamente 6 pares únicos si existe find_the_match
+  if (bundle.findTheMatch) {
+    bundle.findTheMatch = ensureExactlySixUniqueFindTheMatchPairs(bundle.findTheMatch)
   }
 
   return bundle

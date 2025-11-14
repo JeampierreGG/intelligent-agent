@@ -5,6 +5,7 @@ import {
   getUserResourcesLocal,
   getResourceByIdLocal,
   getUserResourceStatsLocal,
+  updateResourceLocal,
   type CreateLocalResourceData
 } from './localStorageService'
 
@@ -31,6 +32,26 @@ export interface CreateResourceData {
   content: GeneratedResource
   // Nuevo: elementos seleccionados por el usuario (opcional)
   selected_elements?: string[]
+}
+
+/**
+ * Devuelve las claves de elementos de juego presentes en el contenido del recurso.
+ * Útil para evitar duplicar lógica en páginas que necesitan saber qué juegos existen.
+ */
+export const detectSelectedGameKeys = (resource: EducationalResource): string[] => {
+  try {
+    const bundle: any = (resource.content as any)?.gameelement || {}
+    const keys: string[] = []
+    if (bundle.matchUp) keys.push('match_up')
+    if (bundle.quiz) keys.push('quiz')
+    if (bundle.groupSort) keys.push('group_sort')
+    if (bundle.anagram) keys.push('anagram')
+    if (bundle.openTheBox) keys.push('open_the_box')
+    if (bundle.findTheMatch) keys.push('find_the_match')
+    return keys
+  } catch {
+    return []
+  }
 }
 
 /**
@@ -92,12 +113,36 @@ export const saveEducationalResource = async (resourceData: CreateResourceData) 
 export const appendGameElementsToResource = async (
   resourceId: string,
   gameBundle: GameElementBundle,
+  userId?: string,
 ): Promise<void> => {
   // Intentar Supabase
   const supabaseAvailable = await isSupabaseAvailable()
   if (!supabaseAvailable) {
-    console.warn('Supabase no disponible: omitiendo actualización de elementos de juego en recurso existente (solo BD)')
-    return
+    // Fallback: actualizar recurso en localStorage si tenemos userId
+    if (!userId) {
+      console.warn('Supabase no disponible y no se proporcionó userId: no se puede actualizar recurso local con elementos de juego')
+      return
+    }
+    try {
+      // Obtener recurso actual desde localStorage
+      const { data: existingLocal } = await getResourceByIdLocal(resourceId, userId)
+      const currentContent: any = existingLocal?.content || {}
+      const mergedContent: any = { ...currentContent }
+      // Combinar bundle dentro de gameelement y en raíz si aplica (mismo comportamiento que en Supabase)
+      mergedContent.gameelement = { ...(currentContent.gameelement || {}), ...gameBundle }
+      if (gameBundle.matchUp) mergedContent.matchUp = gameBundle.matchUp
+      if (gameBundle.quiz) mergedContent.quiz = gameBundle.quiz
+      if (gameBundle.groupSort) mergedContent.groupSort = gameBundle.groupSort
+      if (gameBundle.anagram) mergedContent.anagram = gameBundle.anagram
+      if (gameBundle.openTheBox) mergedContent.openTheBox = gameBundle.openTheBox
+      if (gameBundle.findTheMatch) mergedContent.findTheMatch = gameBundle.findTheMatch
+
+      await updateResourceLocal(resourceId, userId, { content: mergedContent } as any)
+      return
+    } catch (e) {
+      console.error('❌ Error actualizando recurso local con elementos de juego:', e)
+      return
+    }
   }
 
   // Obtener recurso actual para mergear contenido

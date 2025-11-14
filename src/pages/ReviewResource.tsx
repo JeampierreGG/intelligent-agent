@@ -25,6 +25,12 @@ export default function ReviewResource() {
   const sidebarBg = useColorModeValue('white', 'gray.900')
   const borderColor = useColorModeValue('gray.200', 'gray.700')
   const cardBg = useColorModeValue('white', 'gray.800')
+  // Colors used in summary blocks (must be computed at top-level to respect Rules of Hooks)
+  const progressTrackBg = useColorModeValue('gray.200','gray.700')
+  const studyBoxBg = useColorModeValue('green.50','green.900')
+  const studyBoxBorder = useColorModeValue('green.200','green.700')
+  const studyTitleColor = useColorModeValue('green.800','green.200')
+  const studyTextColor = useColorModeValue('gray.800','gray.100')
 
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
@@ -187,7 +193,7 @@ export default function ReviewResource() {
     }
     // Líneas completas si se pasó a otros juegos o resumen
     const linesDoneStages = new Set(['group_sort', 'find_the_match', 'open_box', 'anagram', 'group_sort_summary', 'find_the_match_summary', 'summary'])
-    if (linesDoneStages.has(prog.stage as any)) done.push('Emparejamientos (líneas)')
+  if (linesDoneStages.has(prog.stage as any)) done.push('Unir parejas')
     // Group Sort
     if (groupSortPresent) {
       const groupSortDoneStages = new Set(['find_the_match', 'open_box', 'anagram', 'group_sort_summary', 'summary'])
@@ -211,9 +217,9 @@ export default function ReviewResource() {
   }
 
   const sidebarItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: MdDashboard },
-    { id: 'recursos', label: 'Recursos', icon: MdLibraryBooks },
-    { id: 'ranking', label: 'Ranking', icon: MdLeaderboard }
+    { id: 'dashboard', label: 'Dashboard', icon: MdDashboard, to: '/dashboard' },
+    { id: 'recursos', label: 'Recursos', icon: MdLibraryBooks, to: '/recursos' },
+    { id: 'ranking', label: 'Ranking', icon: MdLeaderboard, to: '/ranking' }
   ] as const
 
   const handleSignOut = async () => {
@@ -278,7 +284,7 @@ export default function ReviewResource() {
                   transition="all 0.2s"
                   onClick={() => {
                     setActiveSection(item.id as any)
-                    navigate('/dashboard', { state: { section: item.id } })
+                    navigate(item.to)
                     try { window.scrollTo({ top: 0, behavior: 'auto' }) } catch {}
                   }}
                   w="full"
@@ -337,7 +343,7 @@ export default function ReviewResource() {
           <Box bg={sidebarBg} borderRight="1px" borderColor={borderColor} w="250px" h="calc(100vh - 60px)" position="sticky" top="60px" p={4}>
             <VStack spacing={2} align="stretch">
               {sidebarItems.map((item) => (
-                <Flex key={item.id} align="center" gap={3} px={4} py={3} borderRadius="lg" cursor="pointer" bg={activeSection === item.id ? 'black' : 'transparent'} color={activeSection === item.id ? 'white' : 'gray.600'} _hover={{ bg: activeSection === item.id ? 'black' : 'gray.100' }} transition="all 0.2s" onClick={() => { setActiveSection(item.id as any); navigate('/dashboard', { state: { section: item.id } }); try { window.scrollTo({ top: 0, behavior: 'auto' }) } catch {} }} w="full">
+                <Flex key={item.id} align="center" gap={3} px={4} py={3} borderRadius="lg" cursor="pointer" bg={activeSection === item.id ? 'black' : 'transparent'} color={activeSection === item.id ? 'white' : 'gray.600'} _hover={{ bg: activeSection === item.id ? 'black' : 'gray.100' }} transition="all 0.2s" onClick={() => { setActiveSection(item.id as any); navigate(item.to); try { window.scrollTo({ top: 0, behavior: 'auto' }) } catch {} }} w="full">
                   <Icon as={item.icon} boxSize={5} />
                   <Text fontSize="sm" fontWeight={activeSection === item.id ? 'semibold' : 'medium'}>{item.label}</Text>
                 </Flex>
@@ -350,7 +356,7 @@ export default function ReviewResource() {
             <Card bg={cardBg} shadow="sm" borderWidth="1px" borderColor={borderColor}>
               <CardBody>
                 <Text color="red.600">{error}</Text>
-                <Button mt={4} onClick={() => navigate('/dashboard', { state: { section: 'recursos' } })}>Volver</Button>
+                <Button mt={4} onClick={() => navigate('/recursos')}>Volver</Button>
               </CardBody>
             </Card>
           </Box>
@@ -398,8 +404,8 @@ export default function ReviewResource() {
         {/* Sidebar */}
         <Box bg={sidebarBg} borderRight="1px" borderColor={borderColor} w="250px" h="calc(100vh - 60px)" position="sticky" top="60px" p={4}>
           <VStack spacing={2} align="stretch">
-            {sidebarItems.map((item) => (
-              <Flex key={item.id} align="center" gap={3} px={4} py={3} borderRadius="lg" cursor="pointer" bg={activeSection === item.id ? 'black' : 'transparent'} color={activeSection === item.id ? 'white' : 'gray.600'} _hover={{ bg: activeSection === item.id ? 'black' : 'gray.100' }} transition="all 0.2s" onClick={() => { setActiveSection(item.id as any); navigate('/dashboard', { state: { section: item.id } }); try { window.scrollTo({ top: 0, behavior: 'auto' }) } catch {} }} w="full">
+              {sidebarItems.map((item) => (
+              <Flex key={item.id} align="center" gap={3} px={4} py={3} borderRadius="lg" cursor="pointer" bg={activeSection === item.id ? 'black' : 'transparent'} color={activeSection === item.id ? 'white' : 'gray.600'} _hover={{ bg: activeSection === item.id ? 'black' : 'gray.100' }} transition="all 0.2s" onClick={() => { setActiveSection(item.id as any); navigate(item.to); try { window.scrollTo({ top: 0, behavior: 'auto' }) } catch {} }} w="full">
                 <Icon as={item.icon} boxSize={5} />
                 <Text fontSize="sm" fontWeight={activeSection === item.id ? 'semibold' : 'medium'}>{item.label}</Text>
               </Flex>
@@ -415,7 +421,7 @@ export default function ReviewResource() {
                   <Text fontSize="2xl" fontWeight="bold">Revisión del recurso</Text>
                   <Text color="gray.600">{resource?.title ?? '(recurso)'}</Text>
                 </Box>
-                <Button onClick={() => navigate('/dashboard', { state: { section: 'recursos' } })}>Volver a Recursos</Button>
+                <Button onClick={() => navigate('/recursos')}>Volver a Recursos</Button>
               </HStack>
 
               {/* Se eliminan Progreso/Barra y Tiempo del HUD superior según requerimiento */}
@@ -452,15 +458,20 @@ export default function ReviewResource() {
                         const attPct: number | null = typeof snapshot?.attempt_progress_pct === 'number' ? snapshot.attempt_progress_pct : null
                         const hhmmss = new Date(((attSecs ?? totalSeconds) || 0) * 1000).toISOString().substring(11, 19)
                         const pctToShow = attPct ?? progressPct
+                        const difficultyToShow: string = (typeof snapshot?.difficulty === 'string' && snapshot.difficulty) ? snapshot.difficulty : (resource?.difficulty || 'Intermedio')
                         return (
                           <VStack align="stretch" spacing={1} mt={2}>
                             <HStack justify="space-between">
                               <Text fontSize="sm" color="gray.700">Tiempo del intento</Text>
                               <Text fontSize="sm" color="gray.800">{hhmmss}</Text>
                             </HStack>
+                            <HStack justify="space-between">
+                              <Text fontSize="sm" color="gray.700">Dificultad</Text>
+                              <Text fontSize="sm" color="gray.800">{difficultyToShow}</Text>
+                            </HStack>
                             <VStack align="stretch" spacing={1}>
                               <Text fontSize="xs" color="gray.600">Progreso del intento: {pctToShow}%</Text>
-                              <Box w="100%" h="6px" bg={useColorModeValue('gray.200','gray.700')} borderRadius="md" overflow="hidden">
+                              <Box w="100%" h="6px" bg={progressTrackBg} borderRadius="md" overflow="hidden">
                                 <Box h="6px" bg="blue.500" width={`${pctToShow}%`} />
                               </Box>
                             </VStack>
@@ -471,9 +482,9 @@ export default function ReviewResource() {
                       {(() => {
                         const studyLabel = completedElements.find((s) => s.startsWith('Estudio:'))
                         return studyLabel ? (
-                          <Box mt={3} p={2} borderWidth="1px" borderRadius="md" bg={useColorModeValue('green.50','green.900')} borderColor={useColorModeValue('green.200','green.700')}>
-                            <Text fontSize="sm" fontWeight="semibold" mb={1} color={useColorModeValue('green.800','green.200')}>Estudio</Text>
-                            <Text fontSize="sm" color={useColorModeValue('gray.800','gray.100')}>{studyLabel}</Text>
+                          <Box mt={3} p={2} borderWidth="1px" borderRadius="md" bg={studyBoxBg} borderColor={studyBoxBorder}>
+                            <Text fontSize="sm" fontWeight="semibold" mb={1} color={studyTitleColor}>Estudio</Text>
+                            <Text fontSize="sm" color={studyTextColor}>{studyLabel}</Text>
                           </Box>
                         ) : null
                       })()}
@@ -583,7 +594,7 @@ export default function ReviewResource() {
 
                 {Array.isArray(snapshot?.linesResults) && snapshot.linesResults.length > 0 && (
                   <VStack align="stretch" spacing={2}>
-                    <Text fontWeight="semibold">Emparejamientos (líneas)</Text>
+        <Text fontWeight="semibold">Unir parejas</Text>
                     {snapshot.linesResults.map((r: any, idx: number) => (
                       <Box key={`sum-line-${idx}`} p={2} borderWidth="1px" borderRadius="md" borderColor={r.correct ? 'green.300' : 'red.300'} bg={r.correct ? 'green.50' : 'red.50'}>
                         <Text fontSize="sm"><strong>{r.term}</strong> → {r.chosen || 'Sin respuesta'}</Text>
@@ -613,7 +624,19 @@ export default function ReviewResource() {
                 )}
 
                   <HStack>
-                    <Button colorScheme="blue" onClick={() => navigate('/dashboard', { state: { section: 'recursos' } })}>Salir</Button>
+                    <Button
+                      colorScheme="blue"
+                      onClick={() => {
+                        try {
+                          navigate('/dashboard', { state: { section: 'recursos' } })
+                        } finally {
+                          // Forzar recarga para refrescar widgets y tarjetas con el mejor puntaje
+                          try { setTimeout(() => window.location.reload(), 50) } catch {}
+                        }
+                      }}
+                    >
+                      Salir
+                    </Button>
                   </HStack>
                 </VStack>
               </CardBody>

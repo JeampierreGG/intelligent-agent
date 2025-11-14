@@ -29,11 +29,35 @@ const slideLR = keyframes`
 `
 
 const FindTheMatch: React.FC<FindTheMatchProps> = ({ content, onComplete }) => {
-  const initialPairs = useMemo(() => (content.pairs || []).slice(0, 6), [content.pairs])
-  const [queue, setQueue] = useState<FindTheMatchPair[]>(() => shuffleArray(initialPairs))
-  const [affirmations, setAffirmations] = useState<string[]>(() => shuffleArray(initialPairs.map(p => p.affirmation)))
+  // Normalización defensiva: garantizar hasta 6 pares únicos por concepto y afirmación,
+  // para cubrir recursos antiguos que pudieran traer duplicados.
+  const normalizedPairs = useMemo<FindTheMatchPair[]>(() => {
+    const raw = Array.isArray(content.pairs) ? content.pairs : []
+    const seenC = new Set<string>()
+    const seenA = new Set<string>()
+    const out: FindTheMatchPair[] = []
+    for (const p of raw) {
+      if (!p || typeof p.concept !== 'string' || typeof p.affirmation !== 'string') continue
+      const c = p.concept.trim()
+      const a = p.affirmation.trim()
+      if (!c || !a) continue
+      const keyC = c.toLowerCase()
+      const keyA = a.toLowerCase()
+      if (seenC.has(keyC) || seenA.has(keyA)) continue
+      seenC.add(keyC)
+      seenA.add(keyA)
+      out.push({ concept: c, affirmation: a })
+      if (out.length === 6) break
+    }
+    return out
+  }, [content.pairs])
+
+  const [queue, setQueue] = useState<FindTheMatchPair[]>(() => shuffleArray(normalizedPairs))
+  const [affirmations, setAffirmations] = useState<string[]>(() => shuffleArray(normalizedPairs.map(p => p.affirmation)))
   const [currentIdx, setCurrentIdx] = useState(0)
-  const speeds = content.speedsMs && content.speedsMs.length >= initialPairs.length ? content.speedsMs : DEFAULT_SPEEDS
+  const speeds = Array.isArray(content.speedsMs) && content.speedsMs.length >= normalizedPairs.length
+    ? content.speedsMs.slice(0, normalizedPairs.length)
+    : DEFAULT_SPEEDS.slice(0, Math.max(1, normalizedPairs.length || DEFAULT_SPEEDS.length))
   const [results, setResults] = useState<Array<{ concept: string; chosen?: string; expected: string; correct: boolean }>>([])
   const timerRef = useRef<number | null>(null)
   const animConceptRef = useRef<string | null>(null)
