@@ -81,7 +81,7 @@ import { generateGameElementsOnly } from '../services/openrouter'
 import { supabase } from '../services/supabase'
 import { getResourceProgress, saveResourceProgress, clearResourceProgress } from '../services/resourceProgress'
 import { clearTimelineProgressForResource } from '../services/timelineProgress'
-import { startNewAttempt, completeAttempt, saveAttemptFinalScore, getAttemptCount, getAttemptsForResource, getUserBestScores, getUserTotalCompletedAttemptSeconds } from '../services/attempts'
+import { startNewAttempt, completeAttempt, saveAttemptFinalScore, getAttemptCount, getUserBestScores, getUserTotalCompletedAttemptSeconds } from '../services/attempts'
 // import { getUserTotalStudySeconds } from '../services/resourceSessions' // Reemplazado por cálculo basado en intentos completados
 import { persistMnemonic } from '../services/mnemonics.ts'
 // Ranking se maneja en su propia página: no se usa en Dashboard
@@ -120,7 +120,7 @@ const [playingStudyElements, setPlayingStudyElements] = useState<StudyElement[] 
   const [resourceProgressMap, setResourceProgressMap] = useState<Record<string, number>>({})
   const [resourceScoreMap, setResourceScoreMap] = useState<Record<string, number>>({})
   // Carga específica para tarjetas de "Recursos recientes" hasta que se calcule progreso y puntaje
-  const [loadingRecentCards, setLoadingRecentCards] = useState<boolean>(false)
+const [, setLoadingRecentCards] = useState<boolean>(false)
   const [totalBestPoints, setTotalBestPoints] = useState<number>(0)
   const [totalStudySeconds, setTotalStudySeconds] = useState<number>(0)
   const [studyIndex, setStudyIndex] = useState<number>(0)
@@ -177,10 +177,10 @@ const [playingFindTheMatch, setPlayingFindTheMatch] = useState<FindTheMatchConte
   const { isOpen: isExitOpen, onOpen: onExitOpen, onClose: onExitClose } = useDisclosure()
   const exitCancelRef = useRef<HTMLButtonElement | null>(null)
   // Review Attempts Modal state
-  const { isOpen: isAttemptsOpen, onOpen: onAttemptsOpen, onClose: onAttemptsClose } = useDisclosure()
-  const [reviewResource, setReviewResource] = useState<EducationalResource | null>(null)
-  const [attemptsForReview, setAttemptsForReview] = useState<Array<{ attempt_number: number; final_score?: number | null }>>([])
-  const [loadingAttempts, setLoadingAttempts] = useState(false)
+const { isOpen: isAttemptsOpen, onClose: onAttemptsClose } = useDisclosure()
+const [reviewResource] = useState<EducationalResource | null>(null)
+const [attemptsForReview] = useState<Array<{ attempt_number: number; final_score?: number | null }>>([])
+const [loadingAttempts] = useState(false)
   
   // Eliminada sincronización de secciones: cada vista tiene su propia ruta top-level
 
