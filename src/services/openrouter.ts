@@ -546,13 +546,7 @@ export async function generateGameElementsOnly(formData: ResourceFormData, selec
 
   const subjectText = (formData.subject || 'General')
   const topicText = (formData.topic || 'Libre')
-  // Construye dinámicamente la estructura según los elementos de juego seleccionados
-  const wantMatchUp = selectedGameKeys.includes('match_up')
-  const wantQuiz = selectedGameKeys.includes('quiz')
-  const wantGroupSort = selectedGameKeys.includes('group_sort')
-  const wantAnagram = selectedGameKeys.includes('anagram')
-  const wantOpenTheBox = selectedGameKeys.includes('open_the_box')
-  const wantFindTheMatch = selectedGameKeys.includes('find_the_match')
+  // La selección de elementos se maneja dentro de requestParsed(keys) usando "keys" directamente
 
   // Nota: La construcción del prompt dinámico se realiza abajo en requestParsed(keys).
 

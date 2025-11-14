@@ -149,7 +149,7 @@ export default function Progress() {
                     <Box position="absolute" left={{ base: '18px', md: '28px' }} top={0} bottom={0} width="2px" bg={borderColor} zIndex={0} />
 
                     <VStack spacing={6} align="stretch">
-                      {resources.map((r, idx) => (
+                      {resources.map((r) => (
                         <HStack key={r.id} align="flex-start" spacing={4} position="relative">
                           {/* Punto */}
                           <Box position="relative" pl={{ base: '40px', md: '60px' }} w="full">
