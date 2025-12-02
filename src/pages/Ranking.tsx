@@ -6,7 +6,7 @@ import { MdDashboard, MdLibraryBooks, MdLeaderboard } from 'react-icons/md'
 import { FiTrendingUp, FiAward } from 'react-icons/fi'
 import { useAuth } from '../contexts/useAuth'
 import { useNavigate } from 'react-router-dom'
-import { getGlobalRanking, type GlobalRankingEntry } from '../services/ranking'
+import { getGlobalRanking, type GlobalRankingEntry, getUsersPublicNames } from '../services/ranking'
 import { supabase } from '../services/supabase'
 
 export default function Ranking() {
@@ -34,6 +34,13 @@ export default function Ranking() {
       try {
         const list = await getGlobalRanking(50)
         setRanking(list)
+        try {
+          const ids = list.map(r => r.user_id)
+          const names = await getUsersPublicNames(ids)
+          setDisplayNames(names)
+        } catch (e) {
+          console.warn('No se pudieron cargar nombres públicos:', e)
+        }
       } catch (e) {
         console.error('Error cargando ranking global:', e)
         setError('No se pudo cargar el ranking global')
@@ -60,6 +67,8 @@ export default function Ranking() {
     }
   }, [])
 
+  const [displayNamesMap, setDisplayNames] = useState<Record<string, { first_name?: string | null; last_name?: string | null }>>({})
+
   const handleSignOut = async () => {
     try { await signOut(); navigate('/login') } catch (err) { console.warn('signOut error:', err) }
   }
@@ -77,7 +86,7 @@ export default function Ranking() {
             <Box>
               <Text fontSize="2xl" fontWeight="bold">Ranking Global</Text>
               <Text color="gray.600">Compite con otros estudiantes</Text>
-              <Text color="gray.500" fontSize="sm">El "Total" corresponde a la suma de todos tus intentos (user_scores).</Text>
+              <Text color="gray.500" fontSize="sm">El "Total" corresponde a la suma de todos tus intentos.</Text>
             </Box>
 
             <Card bg={cardBg} shadow="sm" borderWidth="1px" borderColor={borderColor}>
@@ -109,6 +118,11 @@ export default function Ranking() {
                           const lastName = user?.user_metadata?.last_name || ''
                           return `${firstName}${lastName ? ' ' + lastName : ''}`
                         }
+                        const dn = displayNamesMap[entry.user_id]
+                        const fn = (dn?.first_name || '')
+                        const ln = (dn?.last_name || '')
+                        const full = `${fn}${ln ? ' ' + ln : ''}`.trim()
+                        if (full) return full
                         const uid = entry.user_id
                         return `Usuario ${uid.slice(0, 4)}…${uid.slice(-4)}`
                       })()

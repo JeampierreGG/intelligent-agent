@@ -167,8 +167,23 @@ export async function saveAttemptFinalScore(
     }
     const { error } = await supabase
       .from('user_scores')
-      .insert(payload)
+      .upsert(payload, { onConflict: 'user_id,resource_id,attempt_id' })
     if (error) throw error
+
+    // Upsert public display name para ranking
+    try {
+      const { data: authUser } = await supabase.auth.getUser()
+      const meta = authUser?.user?.user_metadata as { first_name?: string; last_name?: string } | undefined
+      const first = meta?.first_name || null
+      const last = meta?.last_name || null
+      if (first || last) {
+        await supabase
+          .from('user_public_names')
+          .upsert({ user_id: userId, first_name: first, last_name: last }, { onConflict: 'user_id' })
+      }
+    } catch (e) {
+      void e
+    }
 
     const prog = getResourceProgress(userId, resourceId)
     const denom = (name: string): number => {

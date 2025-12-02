@@ -73,7 +73,7 @@ export function computeWeightedFinalScoreFromState(opts: {
   }
 
   if (opts.groupSort) {
-    const denom = (opts.groupSort.groups ?? []).reduce((sum, g) => sum + g.items.length, 0)
+    const denom = (opts.groupSort.groups ?? []).slice(0, 2).reduce((sum, g) => sum + g.items.length, 0)
     const correct = (opts.groupSortResults || []).filter(r => r.correct).length
     elements.push({ name: 'Ordenar por grupo', denom, correct: prog.groupSortConfirmed ? correct : 0 })
   }

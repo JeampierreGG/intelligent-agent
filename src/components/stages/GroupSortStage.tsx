@@ -20,7 +20,7 @@ export default function GroupSortStage({ content, attemptId, resourceId, isCompl
         content={content}
         onComplete={(res) => {
           const expectedMap: Record<string, string> = {}
-          content.groups.forEach(g => g.items.forEach(i => { expectedMap[i] = g.name }))
+          content.groups.slice(0, 2).forEach(g => g.items.forEach(i => { expectedMap[i] = g.name }))
           const results = Object.entries(res.placements).map(([item, grp]) => ({
             item,
             chosenGroup: grp || '',

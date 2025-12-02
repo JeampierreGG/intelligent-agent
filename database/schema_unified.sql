@@ -81,12 +81,9 @@ CREATE TABLE IF NOT EXISTS public.user_scores (
   resource_id uuid not null references public.educational_resources(id) on delete cascade,
   attempt_id uuid,
   attempt_number integer,
-  time_spent_seconds integer default 0,
   progress_pct numeric(5,2) default 0,
   max_score integer default 200,
   percentage numeric(5,2),
-  total_questions integer not null default 0,
-  correct_answers integer not null default 0,
   score numeric(5,2) not null default 0,
   computed_at timestamptz default now(),
   created_at timestamptz default now(),
@@ -95,6 +92,16 @@ CREATE TABLE IF NOT EXISTS public.user_scores (
 ALTER TABLE public.user_scores DISABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS idx_user_scores_user_id ON public.user_scores(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_scores_resource_id ON public.user_scores(resource_id);
+
+-- Asegurar unicidad por intento para evitar duplicados
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'unique_user_resource_attempt' AND conrelid = 'public.user_scores'::regclass
+  ) THEN
+    ALTER TABLE public.user_scores ADD CONSTRAINT unique_user_resource_attempt UNIQUE (user_id, resource_id, attempt_id);
+  END IF;
+END $$;
 
 
 /* =====================================================
@@ -232,6 +239,26 @@ DO $$ BEGIN
 END $$;
 
 /* =====================================================
+   Public display names (para ranking y listados)
+===================================================== */
+CREATE TABLE IF NOT EXISTS public.user_public_names (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  first_name text,
+  last_name text,
+  updated_at timestamptz default now()
+);
+ALTER TABLE public.user_public_names DISABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS idx_user_public_names_user ON public.user_public_names(user_id);
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgname = 'trg_set_updated_at_user_public_names'
+  ) THEN
+    CREATE TRIGGER trg_set_updated_at_user_public_names BEFORE UPDATE ON public.user_public_names FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+  END IF;
+END $$;
+
+/* =====================================================
    Alteraciones para eliminar columnas de progreso
    (idempotentes: solo si existen)
 ===================================================== */
@@ -247,5 +274,29 @@ DO $$ BEGIN
     WHERE table_schema = 'public' AND table_name = 'educational_attempt_item_scores' AND column_name = 'progress_pct_item'
   ) THEN
     ALTER TABLE public.educational_attempt_item_scores DROP COLUMN progress_pct_item;
+  END IF;
+END $$;
+
+/* =====================================================
+   Alteraciones específicas de user_scores (idempotentes)
+===================================================== */
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'user_scores' AND column_name = 'time_spent_seconds'
+  ) THEN
+    ALTER TABLE public.user_scores DROP COLUMN time_spent_seconds;
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'user_scores' AND column_name = 'total_questions'
+  ) THEN
+    ALTER TABLE public.user_scores DROP COLUMN total_questions;
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'user_scores' AND column_name = 'correct_answers'
+  ) THEN
+    ALTER TABLE public.user_scores DROP COLUMN correct_answers;
   END IF;
 END $$;

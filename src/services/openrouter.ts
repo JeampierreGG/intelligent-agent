@@ -15,24 +15,50 @@ const getApiKey = (): string => {
 const callOpenRouter = async (prompt: string, temperature = 0.7): Promise<string> => {
   const apiKey = getApiKey()
   const model = getModel()
-  
   const body = { model, messages: [ { role: 'system', content: 'Responde SOLO con JSON válido. Sin texto fuera del JSON.' }, { role: 'user', content: prompt } ], temperature }
-  const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-      'X-API-KEY': apiKey,
-      'X-Title': 'Learn Playing',
-      'HTTP-Referer': (typeof location !== 'undefined' ? location.origin : 'http://localhost')
-    },
-    body: JSON.stringify(body)
-  })
-  if (!resp.ok) throw new Error('Error en OpenRouter')
-  type ChatCompletion = { choices?: Array<{ message?: { content?: string } }> }
-  const data: ChatCompletion = await resp.json()
-  const content = data?.choices?.[0]?.message?.content ?? ''
-  return content
+
+  const attempt = async (signal: AbortSignal) => {
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'X-API-KEY': apiKey,
+        'X-Title': 'Learn Playing',
+        'HTTP-Referer': (typeof location !== 'undefined' ? location.origin : 'http://localhost')
+      },
+      body: JSON.stringify(body),
+      signal,
+      keepalive: false
+    })
+    return resp
+  }
+
+  let lastErr: unknown = null
+  for (let i = 0; i < 3; i++) {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 30000)
+    try {
+      const resp = await attempt(ctrl.signal)
+      clearTimeout(t)
+      if (resp.ok) {
+        type ChatCompletion = { choices?: Array<{ message?: { content?: string } }> }
+        const data: ChatCompletion = await resp.json()
+        const content = data?.choices?.[0]?.message?.content ?? ''
+        return content
+      }
+      if (resp.status >= 500) {
+        await new Promise(r => setTimeout(r, 1000 * (i + 1)))
+        continue
+      }
+      throw new Error('Error en OpenRouter')
+    } catch (e) {
+      clearTimeout(t)
+      lastErr = e
+      await new Promise(r => setTimeout(r, 1000 * (i + 1)))
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error('Error en OpenRouter')
 }
 
 const findJsonBlock = (s: string): string | null => {

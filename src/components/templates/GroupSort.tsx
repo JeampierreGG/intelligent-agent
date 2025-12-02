@@ -10,10 +10,11 @@ interface GroupSortProps {
 const GroupSort: React.FC<GroupSortProps> = ({ content, onComplete }) => {
   // Máximo de 12 ítems totales, sin mínimo
   const MAX_ITEMS = 6
-  // Obtener un conjunto único de ítems desde la definición (cada ítem pertenece a un grupo correcto)
+  // Obtener ítems únicamente de los 2 grupos visibles
   const allItems = useMemo(() => {
+    const allowedGroups = content.groups.slice(0, 2)
     const set = new Set<string>()
-    content.groups.forEach(g => g.items.forEach(i => set.add(i)))
+    allowedGroups.forEach(g => g.items.forEach(i => set.add(i)))
     const unique = Array.from(set)
     return unique.slice(0, MAX_ITEMS)
   }, [content])
