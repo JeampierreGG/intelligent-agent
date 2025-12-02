@@ -11,16 +11,18 @@ export type Questionnaire = {
   }>;
 };
 
-export function createQuestionnaire(_: Partial<Questionnaire> = {}): Questionnaire {
+export function createQuestionnaire(params: Partial<Questionnaire> = {}): Questionnaire {
+  void params;
   return { title: 'Cuestionario', questions: [] };
 }
 
-export function getQuestionnaireById(_: string): Questionnaire | null {
+export function getQuestionnaireById(id: string): Questionnaire | null {
+  void id;
   return null;
 }
 
-export function navigateToQuestionnaire(_: Questionnaire): void {
-  // No-op: navegación deshabilitada/pendiente de implementación
+export function navigateToQuestionnaire(q: Questionnaire): void {
+  void q;
 }
 
 export default {

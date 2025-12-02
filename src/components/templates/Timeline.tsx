@@ -3,7 +3,8 @@ import { Box, Heading, Text, Badge, Card, CardBody, Grid, GridItem, Checkbox, Ic
 import { ChevronDownIcon } from '@chakra-ui/icons'
 import { keyframes } from '@emotion/react'
 import type { StudyTimelineContent } from '../../services/types'
-import { ensureTimelineForResource, getEventProgress, markEventChecked } from '../../services/timelineEventProgress'
+import { useAuth } from '../../contexts/useAuth'
+import { getResourceProgress, saveResourceProgress } from '../../services/resourceProgress'
 
 interface TimelineProps {
   title: string
@@ -15,6 +16,7 @@ interface TimelineProps {
 // Línea de tiempo vertical centrada con nodos alternando izquierda/derecha
 const Timeline: React.FC<TimelineProps> = ({ title, content, resourceId, onCompleted }) => {
   const colors = ['orange.400', 'purple.400', 'green.400', 'blue.400', 'pink.400', 'teal.400']
+  const { user } = useAuth()
   const [progressIndex, setProgressIndex] = useState(0)
   const extractYear = (d?: string): string => {
     if (!d) return 's.f.'
@@ -39,29 +41,27 @@ const Timeline: React.FC<TimelineProps> = ({ title, content, resourceId, onCompl
     100% { transform: translateY(0); opacity: 0.6; }
   `
 
-  const [timelineId, setTimelineId] = useState<string | null>(null)
   useEffect(() => {
     (async () => {
-      if (!resourceId) return
-      const ensured = await ensureTimelineForResource(resourceId, events)
-      if (!ensured) return
-      setTimelineId(ensured.timeline_id)
-      const progress = await getEventProgress(ensured.timeline_id)
-      const checkedIdxs = Object.keys(progress)
-        .filter(k => progress[Number(k)])
-        .map(k => Number(k))
+      if (!resourceId || !user?.id) return
+      const prog = getResourceProgress(user.id, resourceId)
+      const checks = Array.isArray(prog?.timelineEventChecked) ? prog!.timelineEventChecked! : Array(events.length).fill(false)
+      const checkedIdxs = checks.map((v, i) => ({ v, i })).filter(x => x.v).map(x => x.i)
       const nextIndex = checkedIdxs.length > 0 ? Math.min(events.length, Math.max(...checkedIdxs) + 1) : 0
       setProgressIndex(nextIndex)
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resourceId])
+  }, [resourceId, user?.id])
 
   const advance = async () => {
     const current = progressIndex
     const nextIndex = Math.min(current + 1, events.length)
     setProgressIndex(nextIndex)
-    if (timelineId != null) {
-      await markEventChecked(timelineId, current)
+    if (resourceId && user?.id) {
+      const prog = getResourceProgress(user.id, resourceId)
+      const checks = Array.isArray(prog?.timelineEventChecked) ? [...prog!.timelineEventChecked!] : Array(events.length).fill(false)
+      checks[current] = true
+      saveResourceProgress(user.id, resourceId, { timelineEventChecked: checks })
     }
     if (nextIndex >= events.length && onCompleted) {
       onCompleted()

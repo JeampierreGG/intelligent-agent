@@ -7,52 +7,35 @@ export interface GlobalRankingEntry {
 
 const isSupabaseAvailable = async (): Promise<boolean> => {
   try {
-    const { error } = await supabase.from('educational_resource_attempts').select('id').limit(1)
+    const { error } = await supabase.from('user_scores').select('user_id').limit(1)
     return !error
   } catch {
     return false
   }
 }
 
-// Obtiene el ranking global sumando el MEJOR puntaje final por recurso para cada usuario.
-// Esto alinea el total mostrado aquí con el widget "Puntos Totales" del Dashboard.
-// Limita a topN usuarios para eficiencia.
+// Obtiene el ranking global sumando el MEJOR puntaje por recurso para cada usuario.
+// Fuente de datos: tabla `user_scores` (score por intento y recurso).
 export async function getGlobalRanking(topN = 50): Promise<GlobalRankingEntry[]> {
   const supa = await isSupabaseAvailable()
-  if (!supa) {
-    // Sin Supabase no podemos construir un ranking global confiable
-    return []
-  }
+  if (!supa) return []
+
   const { data, error } = await supabase
-    .from('educational_resource_attempts')
-    .select('user_id, resource_id, final_score')
-    .not('final_score', 'is', null)
+    .from('user_scores')
+    .select('user_id, score')
 
   if (error) throw error
 
-  // Para cada usuario y recurso, tomar el MEJOR puntaje final
-  const perUserPerResourceBest: Map<string, Map<string, number>> = new Map()
-  for (const row of (data || [])) {
-    const userId = (row as any).user_id as string
-    const resId = (row as any).resource_id as string
-    const score = Number((row as any).final_score)
-    if (!userId || !resId || isNaN(score)) continue
-    let resMap = perUserPerResourceBest.get(userId)
-    if (!resMap) {
-      resMap = new Map()
-      perUserPerResourceBest.set(userId, resMap)
-    }
-    const prev = resMap.get(resId)
-    if (prev == null || score > prev) resMap.set(resId, score)
+  type Row = { user_id: string; score: number | null }
+  const totalsMap: Map<string, number> = new Map()
+  for (const row of (data || []) as Row[]) {
+    const userId = row.user_id
+    const s = Number(row.score)
+    if (!userId || isNaN(s)) continue
+    totalsMap.set(userId, (totalsMap.get(userId) || 0) + Math.round(s))
   }
 
-  const totals: GlobalRankingEntry[] = []
-  for (const [userId, resMap] of perUserPerResourceBest.entries()) {
-    let sum = 0
-    for (const score of resMap.values()) sum += score
-    totals.push({ user_id: userId, total_score: Math.round(sum) })
-  }
-
+  const totals: GlobalRankingEntry[] = Array.from(totalsMap.entries()).map(([user_id, total_score]) => ({ user_id, total_score }))
   totals.sort((a, b) => b.total_score - a.total_score)
   return totals.slice(0, topN)
 }

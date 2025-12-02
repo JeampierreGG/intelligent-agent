@@ -6,14 +6,14 @@ export interface UserProfileData {
   birth_day: string
   birth_month: string
   birth_year: string
-  learning_goal: string
+  academic_level: string
 }
 
 export interface UserProfile {
   id: string
   user_id: string
   fecha_nacimiento: string
-  objetivo_aprendizaje: string
+  nivel_academico: string
   created_at: string
   updated_at: string
 }
@@ -22,25 +22,19 @@ export const userProfileService = {
   // Crear perfil de usuario después del registro
   async createUserProfile(userId: string, userData: UserProfileData): Promise<UserProfile | null> {
     try {
+      const { data: sess } = await supabase.auth.getSession()
+      if (!sess?.session?.user) {
+        throw new Error('No hay sesión activa; no se puede crear perfil por RLS')
+      }
       // Convertir fecha de nacimiento al formato DATE
       const fechaNacimiento = `${userData.birth_year}-${userData.birth_month.padStart(2, '0')}-${userData.birth_day.padStart(2, '0')}`
       
-      // Mapear objetivo de aprendizaje al formato esperado en la base de datos
-      const objetivoMapping: { [key: string]: string } = {
-        'desarrollo_academico': 'Desarrollo académico',
-        'crecimiento_profesional': 'Crecimiento profesional',
-        'hobby_personal': 'Hobby personal',
-        'certificacion': 'Certificación'
-      }
-      
-      const objetivoAprendizaje = objetivoMapping[userData.learning_goal] || userData.learning_goal
-
       const { data, error } = await supabase
         .from('user_profiles')
         .insert({
           user_id: userId,
           fecha_nacimiento: fechaNacimiento,
-          objetivo_aprendizaje: objetivoAprendizaje
+          nivel_academico: userData.academic_level
         })
         .select()
         .single()
@@ -65,17 +59,13 @@ export const userProfileService = {
         .from('user_profiles')
         .select('*')
         .eq('user_id', userId)
-        .single()
+        .maybeSingle()
 
       if (error) {
-        if (error.code === 'PGRST116') {
-          // No se encontró el perfil
-          return null
-        }
         throw error
       }
 
-      return data
+      return data || null
     } catch (error) {
       console.error('Error getting user profile:', error)
       throw error
@@ -85,20 +75,14 @@ export const userProfileService = {
   // Actualizar perfil de usuario
   async updateUserProfile(userId: string, updates: Partial<UserProfileData>): Promise<UserProfile | null> {
     try {
-      const updateData: any = {}
+      const updateData: Partial<{ fecha_nacimiento: string; nivel_academico: string }> = {}
 
       if (updates.birth_day && updates.birth_month && updates.birth_year) {
         updateData.fecha_nacimiento = `${updates.birth_year}-${updates.birth_month.padStart(2, '0')}-${updates.birth_day.padStart(2, '0')}`
       }
 
-      if (updates.learning_goal) {
-        const objetivoMapping: { [key: string]: string } = {
-          'desarrollo_academico': 'Desarrollo académico',
-          'crecimiento_profesional': 'Crecimiento profesional',
-          'hobby_personal': 'Hobby personal',
-          'certificacion': 'Certificación'
-        }
-        updateData.objetivo_aprendizaje = objetivoMapping[updates.learning_goal] || updates.learning_goal
+      if (updates.academic_level) {
+        updateData.nivel_academico = updates.academic_level
       }
 
       const { data, error } = await supabase

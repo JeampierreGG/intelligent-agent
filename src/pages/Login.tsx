@@ -1,11 +1,10 @@
 import React, { useState } from 'react'
 import { Link as RouterLink, useNavigate } from 'react-router-dom'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth } from '../contexts/useAuth'
 import { translateSupabaseError } from '../utils/errorTranslations'
 import {
   Box,
   Button,
-  Checkbox,
   Container,
   Divider,
   Flex,
@@ -19,16 +18,27 @@ import {
   Alert,
   AlertIcon,
   Image,
+  InputGroup,
+  InputRightElement,
+  IconButton,
+  FormErrorMessage
 } from '@chakra-ui/react'
+import { ViewIcon, ViewOffIcon } from '@chakra-ui/icons'
 import logoIA from '../assets/Logo-IA.png'
 
 export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const { signIn } = useAuth()
   const navigate = useNavigate()
+
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim().toLowerCase())
+  const passwordValid = password.length >= 8
+  const [emailTouched, setEmailTouched] = useState(false)
+  const [passwordTouched, setPasswordTouched] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -36,9 +46,22 @@ export default function Login() {
     try {
       setError('')
       setLoading(true)
+      const emailSan = email.trim().toLowerCase()
+      const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailSan)
+      if (!emailOk) {
+        setError('Ingresa un email válido')
+        setLoading(false)
+        return
+      }
+      const pwd = password
+      if (!pwd || pwd.length < 8) {
+        setError('La contraseña debe tener al menos 8 caracteres')
+        setLoading(false)
+        return
+      }
       
       // El AuthContext ahora lanza excepciones en caso de error
-      await signIn(email, password)
+      await signIn(emailSan, pwd)
       
       // Si el login fue exitoso, navegar directamente al dashboard
       navigate('/dashboard')
@@ -111,8 +134,8 @@ export default function Login() {
               </Alert>
             )}
 
-            <Stack as="form" spacing="4" onSubmit={handleSubmit}>
-              <FormControl id="email" isRequired>
+            <Stack as="form" spacing="4" onSubmit={handleSubmit} noValidate>
+              <FormControl id="email" isRequired isInvalid={emailTouched && !emailValid}>
                 <FormLabel fontSize="sm" _after={{ color: "black" }}>Email</FormLabel>
                 <Input
                   type="email"
@@ -121,26 +144,43 @@ export default function Login() {
                   borderRadius="md"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  onBlur={() => setEmailTouched(true)}
+                  aria-invalid={emailTouched && !emailValid}
+                  borderColor={emailTouched && !emailValid ? 'red.500' : 'gray.300'}
+                  _focus={{ borderColor: emailTouched && !emailValid ? 'red.500' : 'teal.500' }}
                 />
+                <FormErrorMessage>Ingresa un email válido</FormErrorMessage>
               </FormControl>
 
-              <FormControl id="password" isRequired>
+              <FormControl id="password" isRequired isInvalid={passwordTouched && !passwordValid}>
                 <FormLabel fontSize="sm" _after={{ color: "black" }}>Contraseña</FormLabel>
-                <Input
-                  type="password"
-                  placeholder="••••••••"
-                  size="md"
-                  borderRadius="md"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
+                <InputGroup>
+                  <Input
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    size="md"
+                    borderRadius="md"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onBlur={() => setPasswordTouched(true)}
+                    aria-invalid={passwordTouched && !passwordValid}
+                    borderColor={passwordTouched && !passwordValid ? 'red.500' : 'gray.300'}
+                    _focus={{ borderColor: passwordTouched && !passwordValid ? 'red.500' : 'teal.500' }}
+                  />
+                  <InputRightElement>
+                    <IconButton
+                      aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                      icon={showPassword ? <ViewOffIcon /> : <ViewIcon />}
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setShowPassword((v) => !v)}
+                    />
+                  </InputRightElement>
+                </InputGroup>
+                <FormErrorMessage>La contraseña debe tener al menos 8 caracteres</FormErrorMessage>
               </FormControl>
 
-              <Flex justify="flex-start" align="center">
-                <Checkbox size="sm" colorScheme="teal">
-                  Recordarme
-                </Checkbox>
-              </Flex>
+              
 
               <Button
                 type="submit"
@@ -154,6 +194,7 @@ export default function Login() {
                 color="white"
                 _hover={{ bg: "gray.700" }}
                 _active={{ bg: "gray.900" }}
+                isDisabled={loading || !emailValid || !passwordValid}
               >
                 Iniciar Sesión
               </Button>

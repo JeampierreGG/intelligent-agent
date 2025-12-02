@@ -35,7 +35,9 @@ const AccordionNotes: React.FC<AccordionNotesProps> = ({ title, content, onCompl
       try {
         const arr = Array.from(next)
         localStorage.setItem(`accordion_visited_${persistKey}`, JSON.stringify(arr))
-      } catch {}
+      } catch (err) {
+        console.warn('persist accordion visited error:', err)
+      }
     }
     if (next.size >= total && onCompleted) {
       onCompleted()
@@ -51,9 +53,13 @@ const AccordionNotes: React.FC<AccordionNotesProps> = ({ title, content, onCompl
           const arr = JSON.parse(raw) as number[]
           setVisited(new Set(arr))
         }
-      } catch {}
+      } catch (err) {
+        console.warn('load accordion visited error:', err)
+      }
     }
   }, [persistKey])
+
+  const panelTextColor = useColorModeValue('gray.700','gray.200')
 
   return (
     <Box borderWidth="1px" borderColor={itemBorder} borderRadius="lg" p={4} bg={cardBg} boxShadow="sm">
@@ -83,7 +89,7 @@ const AccordionNotes: React.FC<AccordionNotesProps> = ({ title, content, onCompl
               </AccordionButton>
             </h2>
             <AccordionPanel px={4} py={3} bg={itemBg}>
-              <Text whiteSpace="pre-line" color={useColorModeValue('gray.700','gray.200')}>{sec.body}</Text>
+              <Text whiteSpace="pre-line" color={panelTextColor}>{sec.body}</Text>
             </AccordionPanel>
           </AccordionItem>
         ))}

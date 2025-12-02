@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Box, Flex, VStack, HStack, Text, Card, CardBody, Icon, Avatar, Menu, MenuButton, MenuList, MenuItem, useColorModeValue, Image, Badge, Spinner } from '@chakra-ui/react'
-import { ChevronDownIcon } from '@chakra-ui/icons'
+import { Box, Flex, VStack, HStack, Text, Card, CardBody, Icon, useColorModeValue, Badge, Spinner } from '@chakra-ui/react'
+import AppHeader from '../components/layout/AppHeader'
+import AppSidebar from '../components/layout/AppSidebar'
 import { MdDashboard, MdLibraryBooks, MdLeaderboard } from 'react-icons/md'
 import { FiTrendingUp, FiAward } from 'react-icons/fi'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth } from '../contexts/useAuth'
 import { useNavigate } from 'react-router-dom'
-import logoImage from '../assets/Logo-IA.png'
 import { getGlobalRanking, type GlobalRankingEntry } from '../services/ranking'
 import { supabase } from '../services/supabase'
 
@@ -14,8 +14,6 @@ export default function Ranking() {
   const navigate = useNavigate()
 
   const bgColor = useColorModeValue('#f7fafc', 'gray.900')
-  const headerBg = useColorModeValue('white', 'gray.800')
-  const sidebarBg = useColorModeValue('white', 'gray.900')
   const borderColor = useColorModeValue('gray.200', 'gray.700')
   const cardBg = useColorModeValue('white', 'gray.800')
 
@@ -43,8 +41,7 @@ export default function Ranking() {
         setLoading(false)
       }
     }
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    load()
+    void load()
 
     // Suscripción en tiempo real para actualizar el ranking cuando cambien intentos o puntajes finales
     let cleaning = false
@@ -52,68 +49,27 @@ export default function Ranking() {
       .channel('ranking-realtime')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'educational_resource_attempts' },
+        { event: '*', schema: 'public', table: 'user_scores' },
         () => { if (!cleaning) { void load() } }
       )
       .subscribe()
 
     return () => {
       cleaning = true
-      try { supabase.removeChannel(channel) } catch {}
+      try { supabase.removeChannel(channel) } catch (err) { console.warn('removeChannel error:', err) }
     }
   }, [])
 
   const handleSignOut = async () => {
-    try { await signOut(); navigate('/login') } catch {}
+    try { await signOut(); navigate('/login') } catch (err) { console.warn('signOut error:', err) }
   }
 
   return (
     <Box minH="100vh" bg={bgColor} w="100%" maxW="100vw">
-      {/* Header */}
-      <Box bg={headerBg} borderBottom="1px" borderColor={borderColor} px={6} h="60px" position="sticky" top={0} zIndex={1000} w="100%">
-        <Flex justify="space-between" align="center" h="100%">
-          <Flex align="center" gap={3}>
-            <Image src={logoImage} alt="Learn Playing" height="32px" width="auto" />
-            <Text fontSize="xl" fontWeight="bold" color="gray.800">Learn Playing</Text>
-          </Flex>
-          <Menu>
-            <MenuButton as={Box} cursor="pointer" _hover={{ bg: 'gray.50' }} px={3} py={2} borderRadius="md" transition="all 0.2s" minW="fit-content" w="auto" height="40px">
-              <Flex direction="row" align="center" gap={2} height="100%">
-                <Avatar size="sm" name={`${user?.user_metadata?.first_name || ''} ${user?.user_metadata?.last_name || ''}`.trim() || user?.email} bg="blue.500" flexShrink={0} />
-                <Text fontSize="sm" fontWeight="medium" whiteSpace="nowrap" flexShrink={0}>
-                  {(() => {
-                    const firstName = user?.user_metadata?.first_name || user?.email?.split('@')[0] || ''
-                    return firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase()
-                  })()}
-                </Text>
-                <Text fontSize="sm" fontWeight="medium" whiteSpace="nowrap" flexShrink={0}>
-                  {(() => {
-                    const lastName = user?.user_metadata?.last_name || ''
-                    return lastName ? lastName.charAt(0).toUpperCase() + lastName.slice(1).toLowerCase() : ''
-                  })()}
-                </Text>
-                <ChevronDownIcon flexShrink={0} />
-              </Flex>
-            </MenuButton>
-            <MenuList>
-              <MenuItem onClick={handleSignOut}>Cerrar Sesión</MenuItem>
-            </MenuList>
-          </Menu>
-        </Flex>
-      </Box>
+      <AppHeader user={user} onSignOut={handleSignOut} />
 
       <Flex>
-        {/* Sidebar */}
-        <Box bg={sidebarBg} borderRight="1px" borderColor={borderColor} w="250px" h="calc(100vh - 60px)" position="sticky" top="60px" p={4}>
-          <VStack spacing={2} align="stretch">
-            {sidebarItems.map((item) => (
-              <Flex key={item.id} align="center" gap={3} px={4} py={3} borderRadius="lg" cursor="pointer" bg={item.id === 'ranking' ? 'black' : 'transparent'} color={item.id === 'ranking' ? 'white' : 'gray.600'} _hover={{ bg: item.id === 'ranking' ? 'black' : 'gray.100' }} transition="all 0.2s" onClick={() => { try { window.scrollTo({ top: 0, behavior: 'auto' }) } catch {}; navigate(item.to) }} w="full">
-                <Icon as={item.icon} boxSize={5} />
-                <Text fontSize="sm" fontWeight={item.id === 'ranking' ? 'semibold' : 'medium'}>{item.label}</Text>
-              </Flex>
-            ))}
-          </VStack>
-        </Box>
+        <AppSidebar items={sidebarItems} />
 
         {/* Main content */}
         <Box flex={1} p={6} w="100%">
@@ -121,7 +77,7 @@ export default function Ranking() {
             <Box>
               <Text fontSize="2xl" fontWeight="bold">Ranking Global</Text>
               <Text color="gray.600">Compite con otros estudiantes</Text>
-              <Text color="gray.500" fontSize="sm">El "Total" corresponde a la suma de tu MEJOR puntaje final por cada recurso.</Text>
+              <Text color="gray.500" fontSize="sm">El "Total" corresponde a la suma de todos tus intentos (user_scores).</Text>
             </Box>
 
             <Card bg={cardBg} shadow="sm" borderWidth="1px" borderColor={borderColor}>
@@ -136,7 +92,7 @@ export default function Ranking() {
                 ) : ranking.length === 0 ? (
                   <VStack spacing={4} py={8}>
                     <Icon as={FiTrendingUp} boxSize={12} color="gray.400" />
-                    <Text fontSize="lg" color="gray.600">Aún no hay datos de ranking</Text>
+                    <Text fontSize="lg" color="gray.600">Aún no tienes recursos. Crea tu primer recurso desde el Dashboard.</Text>
                     <Text color="gray.500" textAlign="center">Completa recursos para sumar puntos y aparecer en el ranking</Text>
                   </VStack>
                 ) : (

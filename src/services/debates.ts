@@ -2,7 +2,7 @@
 
 // Genera una pregunta inicial y opiniones a favor y en contra.
 export async function generateInitialDebate(subject: string, topic: string): Promise<{ question: string; pro: string; con: string }> {
-  const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY || import.meta.env.VITE_GEMINI_API_KEY
+  const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY
   const baseQuestion = `¿Debería ${topic} ser promovido activamente en el ámbito de ${subject}?`
   if (!apiKey) {
     return {
@@ -43,7 +43,7 @@ En contra: <opinión breve>`
 
 // Genera una nueva ronda de opiniones a favor y en contra en base a la opinión del usuario.
 export async function generateDebateRound(question: string, userOpinion: string, position: 'pro' | 'con'): Promise<{ pro: string; con: string }> {
-  const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY || import.meta.env.VITE_GEMINI_API_KEY
+  const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY
   if (!apiKey) {
     // Fallback: variar las frases con conectores
     const connector = position === 'pro' ? 'Desde la postura a favor' : 'Desde la postura en contra'

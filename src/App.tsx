@@ -1,6 +1,7 @@
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { AuthProvider } from './contexts/AuthContext'
+import { useAuth } from './contexts/useAuth'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
@@ -8,7 +9,8 @@ import Resources from './pages/Resources'
 import Ranking from './pages/Ranking'
 import ReviewResource from './pages/ReviewResource'
 import { DashboardProtectedRoute } from './components/DashboardProtectedRoute'
-import Progress from './pages/Progress'
+  import Progress from './pages/Progress'
+  import PlayResource from './pages/PlayResource'
 
 // Componente para rutas públicas (solo accesibles si no está logueado)
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -79,14 +81,22 @@ function App() {
                 </DashboardProtectedRoute>
               } 
             />
-            <Route 
-              path="/review/:resourceId" 
-              element={
-                <DashboardProtectedRoute>
-                  <ReviewResource />
-                </DashboardProtectedRoute>
-              } 
-            />
+          <Route 
+            path="/review/:resourceId" 
+            element={
+              <DashboardProtectedRoute>
+                <ReviewResource />
+              </DashboardProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/play/:resourceId" 
+            element={
+              <DashboardProtectedRoute>
+                <PlayResource />
+              </DashboardProtectedRoute>
+            } 
+          />
           </Routes>
         </div>
       </Router>

@@ -3,12 +3,13 @@
 export interface ResourceFormData {
   subject: string;
   topic: string;
+  difficulty?: 'Básico' | 'Intermedio' | 'Avanzado';
   userBirthData?: {
     birth_day?: number | string;
     birth_month?: number | string;
     birth_year?: number | string;
   };
-  learningGoal?: string;
+  academicLevel?: string;
 }
 
 export interface MatchUpPair {
@@ -16,30 +17,18 @@ export interface MatchUpPair {
   right: string;  // definición/respuesta
 }
 
-export interface MatchUpImagesItem {
-  term: string;               // término que se debe arrastrar
-  imageDescription: string;   // descripción de la imagen a generar
-  imageUrl?: string;          // URL de imagen generada (pollinations)
-}
-
 export interface MatchUpLinesContent {
   pairs: MatchUpPair[];
-}
-
-export interface MatchUpImagesContent {
-  items: MatchUpImagesItem[];
 }
 
 export interface MatchUpContent {
   templateType: 'match_up';
   title: string;
   instructions_lines: string;   // instrucciones para el modo líneas
-  instructions_images: string;  // instrucciones para el modo imágenes
   subject: string;
   topic: string;
   difficulty?: 'Básico' | 'Intermedio' | 'Avanzado';
   linesMode: MatchUpLinesContent;   // Primer match up: conectar con líneas
-  imagesMode?: MatchUpImagesContent; // Segundo match up: arrastrar términos a imágenes (opcional)
 }
 
 // Nuevo: Cuestionario (Wordwall: Quiz)
@@ -136,7 +125,6 @@ export interface FindTheMatchContent {
 export type StudyElementType = 'course_presentation' | 'accordion_notes' | 'timeline' | 'mnemonic_creator'
 
 export interface StudyCoursePresentationContent {
-  backgroundImageUrl?: string; // Imagen de fondo única (Wikimedia preferentemente)
   slides: Array<{
     title: string;
     text: string;
@@ -154,13 +142,10 @@ export interface StudyTimelineEvent {
   title: string;
   description: string;
   date?: string;
-  imageUrl?: string;
 }
 
 export interface StudyTimelineContent {
   events: StudyTimelineEvent[];
-  // Imagen referencial única del tema a mostrar al final de la línea de tiempo
-  topicImageUrl?: string;
 }
 
 // Nuevo: Nemotecnia (creación de mnemotecnia por el alumno con opción de generación automática)

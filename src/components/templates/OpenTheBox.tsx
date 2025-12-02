@@ -31,7 +31,7 @@ const OpenTheBox: React.FC<OpenTheBoxProps> = ({ content, onComplete, renderCont
 
   const allAnswered = useMemo(() => checked.every(Boolean), [checked])
 
-  const finish = () => {
+  const finish = React.useCallback(() => {
     const details = items.map((it, idx) => {
       const chosenIndex = selected[idx] ?? -1
       const correctIndex = it.correctIndex
@@ -47,14 +47,14 @@ const OpenTheBox: React.FC<OpenTheBoxProps> = ({ content, onComplete, renderCont
     setResults(details.map(d => d.correct))
     setFinished(true)
     onComplete?.(details)
-  }
+  }, [items, selected, onComplete])
 
   // Si todas las cajas están respondidas, finalizar automáticamente para habilitar el botón "Continuar" externo.
   React.useEffect(() => {
     if (items.length > 0 && allAnswered && !finished) {
       finish()
     }
-  }, [allAnswered, finished, items.length])
+  }, [allAnswered, finished, items.length, finish])
 
   return (
     <VStack align="stretch" spacing={4}>

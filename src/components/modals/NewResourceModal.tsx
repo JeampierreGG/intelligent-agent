@@ -11,6 +11,7 @@ import {
   FormControl,
   FormLabel,
   Input,
+  Select,
   VStack,
   HStack,
   Text,
@@ -23,8 +24,9 @@ import {
 import { generateStudyOnlyResource, generateGameElementsOnly } from '../../services/openrouter'
 import type { ResourceFormData } from '../../services/types'
 import { saveEducationalResource, type CreateResourceData } from '../../services/resources'
-import { useAuth } from '../../contexts/AuthContext'
+import { useAuth } from '../../contexts/useAuth'
 import { userProfileService } from '../../services/userProfileService'
+// import { useNavigate } from 'react-router-dom'
 
 interface NewResourceModalProps {
   isOpen: boolean
@@ -38,9 +40,11 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
   const toast = useToast()
   const { user } = useAuth()
   const [isGenerating, setIsGenerating] = useState(false)
+  // const navigate = useNavigate()
   const [formData, setFormData] = useState({
     subject: '',
-    topic: ''
+    topic: '',
+    difficulty: 'Intermedio' as import('../../services/types').ResourceFormData['difficulty']
   })
   // Nuevo: selección de elementos de juego y aprendizaje
   const GAME_OPTIONS = [
@@ -63,9 +67,9 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
   const minLearning = 2
   const [profileLoading, setProfileLoading] = useState(false)
   const [profileBirth, setProfileBirth] = useState<{ birth_day?: string; birth_month?: string; birth_year?: string }>({})
-  const [profileLearningGoal, setProfileLearningGoal] = useState<string | undefined>(undefined)
+  const [profileAcademicLevel, setProfileAcademicLevel] = useState<string | undefined>(undefined)
 
-  // Cargar perfil del usuario desde Supabase para obtener fecha_nacimiento y objetivo_aprendizaje
+  // Cargar perfil del usuario desde Supabase para obtener fecha_nacimiento y nivel_academico
   useEffect(() => {
     const loadProfile = async () => {
       if (!user?.id) return
@@ -73,13 +77,35 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
       try {
         const profile = await userProfileService.getUserProfile(user.id)
         if (profile) {
-          // fecha_nacimiento esperada en formato YYYY-MM-DD
           const parts = (profile.fecha_nacimiento || '').split('-')
           if (parts.length === 3) {
             const [year, month, day] = parts
             setProfileBirth({ birth_day: day, birth_month: month, birth_year: year })
           }
-          setProfileLearningGoal(profile.objetivo_aprendizaje)
+          setProfileAcademicLevel(profile.nivel_academico)
+        } else {
+          const md = user.user_metadata || {}
+          const bd = { birth_day: md.birth_day as string | undefined, birth_month: md.birth_month as string | undefined, birth_year: md.birth_year as string | undefined }
+          const al = md.academic_level as string | undefined
+          if (bd.birth_day && bd.birth_month && bd.birth_year && al) {
+            const newData = {
+              first_name: (md.first_name as string) || '',
+              last_name: (md.last_name as string) || '',
+              birth_day: bd.birth_day,
+              birth_month: bd.birth_month,
+              birth_year: bd.birth_year,
+              academic_level: al,
+            }
+            const created = await userProfileService.createUserProfile(user.id, newData)
+            if (created) {
+              const parts = (created.fecha_nacimiento || '').split('-')
+              if (parts.length === 3) {
+                const [year, month, day] = parts
+                setProfileBirth({ birth_day: day, birth_month: month, birth_year: year })
+              }
+              setProfileAcademicLevel(created.nivel_academico)
+            }
+          }
         }
       } catch (e) {
         console.error('❌ Error cargando perfil del usuario:', e)
@@ -107,14 +133,23 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
     }
 
     // Validación: Materia/Curso y Tema son obligatorios
-    const subj = (formData.subject || '').trim()
-    const topc = (formData.topic || '').trim()
+    const sanitize = (s: string) => s.replace(/[<>"'`]/g, '').replace(/\s+/g, ' ').trim()
+    const subj = sanitize(formData.subject || '')
+    const topc = sanitize(formData.topic || '')
     if (!subj || !topc) {
       toast({
         title: 'Campos obligatorios faltantes',
         description: 'Materia/Curso y Tema son obligatorios.',
         status: 'error', duration: 4000, isClosable: true
       })
+      return
+    }
+    if (subj.length < 3 || topc.length < 3) {
+      toast({ title: 'Texto demasiado corto', description: 'Usa al menos 3 caracteres en cada campo.', status: 'warning', duration: 3000, isClosable: true })
+      return
+    }
+    if (subj.length > 120 || topc.length > 120) {
+      toast({ title: 'Texto demasiado largo', description: 'Máximo 120 caracteres por campo.', status: 'warning', duration: 3000, isClosable: true })
       return
     }
 
@@ -133,22 +168,23 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
     try {
       // Preparar datos para OpenRouter usando perfil de Supabase como fuente principal
       const resourceData: ResourceFormData = {
-        subject: formData.subject,
-        topic: formData.topic,
-        // La dificultad se deducirá automáticamente en base a la edad y objetivo de aprendizaje
+        subject: subj,
+        topic: topc,
+        difficulty: formData.difficulty,
+        // La dificultad se deducirá automáticamente en base a la edad y nivel académico
         userBirthData: {
           birth_day: profileBirth.birth_day || user.user_metadata?.birth_day,
           birth_month: profileBirth.birth_month || user.user_metadata?.birth_month,
           birth_year: profileBirth.birth_year || user.user_metadata?.birth_year
         },
-        learningGoal: profileLearningGoal || user.user_metadata?.learning_goal
+        academicLevel: profileAcademicLevel || user.user_metadata?.academic_level
       }
 
       console.log('🚀 Generando elementos seleccionados (aprendizaje y juego)...')
       console.log('📋 Datos del formulario:', resourceData)
       console.log('👤 Datos del usuario (perfil Supabase + metadata):', {
         birthData: resourceData.userBirthData,
-        learningGoal: resourceData.learningGoal
+        academicLevel: resourceData.academicLevel
       })
 
       // Generar en paralelo: elementos de aprendizaje seleccionados + elementos de juego seleccionados
@@ -161,41 +197,51 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
 
       // Combinar en un único contenido manteniendo SOLO lo seleccionado
       const selectedElements = [...selectedGame, ...selectedLearning]
-      const combinedContent: any = {
+      const filteredStudy = Array.isArray(generatedStudy.studyElements)
+        ? generatedStudy.studyElements.filter(el => selectedLearning.includes(el.type))
+        : []
+      const dedupStudy: typeof filteredStudy = []
+      const seenTypes = new Set<string>()
+      for (const el of filteredStudy) {
+        const t = el.type
+        if (seenTypes.has(t)) continue
+        seenTypes.add(t)
+        dedupStudy.push(el)
+      }
+      const combinedContent: import('../../services/types').GeneratedResource = {
         title: generatedStudy.title,
         summary: generatedStudy.summary,
         difficulty: generatedStudy.difficulty || 'Intermedio',
-        studyElements: Array.isArray(generatedStudy.studyElements)
-          ? generatedStudy.studyElements.filter(el => selectedLearning.includes(el.type))
-          : [],
+        studyElements: dedupStudy,
         gameelement: { ...gameBundle },
-        // Copias en raíz para compatibilidad con componentes existentes
-        ...(gameBundle.matchUp ? { matchUp: gameBundle.matchUp } : {}),
-        ...(gameBundle.quiz ? { quiz: gameBundle.quiz } : {}),
-        ...(gameBundle.groupSort ? { groupSort: gameBundle.groupSort } : {}),
-        ...(gameBundle.anagram ? { anagram: gameBundle.anagram } : {}),
-        ...(gameBundle.openTheBox ? { openTheBox: gameBundle.openTheBox } : {}),
-        ...(gameBundle.findTheMatch ? { findTheMatch: gameBundle.findTheMatch } : {}),
       }
 
       const saveCombined: CreateResourceData = {
         user_id: user.id,
         title: generatedStudy.title,
-        subject: formData.subject,
-        topic: formData.topic,
-        difficulty: generatedStudy.difficulty || 'Intermedio',
+        subject: subj,
+        topic: topc,
+        difficulty: formData.difficulty || generatedStudy.difficulty || 'Intermedio',
         content: combinedContent,
         selected_elements: selectedElements,
       }
       const { data: savedCombined, error: saveErrCombined } = await saveEducationalResource(saveCombined)
       if (saveErrCombined) throw saveErrCombined
 
-      console.log('✅ Recurso guardado con TODOS los elementos seleccionados:', { savedCombined })
+      try {
+        const c = savedCombined?.content as import('../../services/types').GeneratedResource | undefined
+        const detail = { id: savedCombined?.id, content: c }
+        console.groupCollapsed('✅ Recurso guardado (contenido completo)')
+        console.log(detail)
+        console.groupEnd()
+      } catch (e) {
+        console.warn('log recurso completo error:', e)
+      }
 
       toast({ title: 'Recurso creado', description: 'Se generaron todos los elementos seleccionados.', status: 'success', duration: 4000, isClosable: true })
 
       // Resetear formulario y cerrar el modal
-      setFormData({ subject: '', topic: '' })
+      setFormData({ subject: '', topic: '', difficulty: 'Intermedio' })
       setSelectedGame([])
       setSelectedLearning([])
       onClose()
@@ -223,6 +269,12 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
         <ModalCloseButton />
         <ModalBody>
           <VStack spacing={6} align="stretch">
+            {isGenerating && (
+              <HStack justify="center" align="center">
+                <Spinner />
+                <Text color="gray.600">Generando recurso con IA…</Text>
+              </HStack>
+            )}
          
             
             <HStack spacing={4} align="stretch">
@@ -232,7 +284,9 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
                   placeholder="Ej: Matemáticas, Historia, Programación, Biología..."
                   value={formData.subject}
                   onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                  onBlur={(e) => setFormData({ ...formData, subject: normalizeFirstUpper(e.target.value) })}
                   size="lg"
+                  isDisabled={isGenerating}
                 />
               </FormControl>
               <FormControl isRequired>
@@ -241,14 +295,29 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
                   placeholder="Ej: Ecuaciones cuadráticas, Segunda Guerra Mundial, Funciones en JavaScript..."
                   value={formData.topic}
                   onChange={(e) => setFormData({ ...formData, topic: e.target.value })}
+                  onBlur={(e) => setFormData({ ...formData, topic: normalizeFirstUpper(e.target.value) })}
                   size="lg"
+                  isDisabled={isGenerating}
                 />
+              </FormControl>
+              <FormControl>
+                <FormLabel>Dificultad</FormLabel>
+                <Select
+                  value={formData.difficulty}
+                  onChange={(e) => setFormData({ ...formData, difficulty: e.target.value as ResourceFormData['difficulty'] })}
+                  size="lg"
+                  isDisabled={isGenerating}
+                >
+                  <option value="Básico">Básico</option>
+                  <option value="Intermedio">Intermedio</option>
+                  <option value="Avanzado">Avanzado</option>
+                </Select>
               </FormControl>
             </HStack>
 
             <VStack align="stretch" spacing={4}>
               <FormLabel>Elementos de Aprendizaje</FormLabel>
-              <CheckboxGroup colorScheme="green" value={selectedLearning} onChange={(v) => setSelectedLearning(v as string[])}>
+              <CheckboxGroup colorScheme="green" value={selectedLearning} onChange={(v) => setSelectedLearning(v as string[])} isDisabled={isGenerating}>
                 <SimpleGrid columns={{ base: 1, sm: 2, md: 3 }} spacing={2}>
                   {LEARNING_OPTIONS.map(opt => (
                     <Checkbox key={opt.key} value={opt.key}>{opt.label}</Checkbox>
@@ -262,7 +331,7 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
 
             <VStack align="stretch" spacing={4}>
               <FormLabel>Elementos de Juego</FormLabel>
-              <CheckboxGroup colorScheme="blue" value={selectedGame} onChange={(v) => setSelectedGame(v as string[])}>
+              <CheckboxGroup colorScheme="blue" value={selectedGame} onChange={(v) => setSelectedGame(v as string[])} isDisabled={isGenerating}>
                 <SimpleGrid columns={{ base: 1, sm: 2, md: 3 }} spacing={2}>
                   {GAME_OPTIONS.map(opt => (
                     <Checkbox key={opt.key} value={opt.key}>{opt.label}</Checkbox>
@@ -306,3 +375,9 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
 }
 
 export default NewResourceModal
+  const normalizeFirstUpper = (s: string) => {
+    const t = (s || '').trim()
+    if (!t) return ''
+    const lower = t.toLowerCase()
+    return lower.charAt(0).toUpperCase() + lower.slice(1)
+  }

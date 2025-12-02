@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Box, Flex, VStack, HStack, Text, Card, CardBody, Icon, Avatar, Menu, MenuButton, MenuList, MenuItem, useColorModeValue, Image, Badge, Button, Spinner } from '@chakra-ui/react'
 import { ChevronDownIcon } from '@chakra-ui/icons'
 import { MdDashboard, MdLibraryBooks, MdLeaderboard } from 'react-icons/md'
 import { FiBookOpen, FiClock } from 'react-icons/fi'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth } from '../contexts/useAuth'
 import { useNavigate } from 'react-router-dom'
 import logoImage from '../assets/Logo-IA.png'
 import { getUserResources, type EducationalResource } from '../services/resources'
+import type { StudyElement } from '../services/types'
 import { supabase } from '../services/supabase'
 
 export default function Progress() {
@@ -29,29 +30,56 @@ export default function Progress() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const loadResources = async () => {
+  const loadResources = useCallback(async () => {
     if (!user?.id) return
     setLoading(true)
     setError(null)
     try {
       const { data } = await getUserResources(user.id)
-      setResources((data || []).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()))
+      const sorted = (data || []).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      setResources(sorted)
+      try {
+        const summarize = (r: EducationalResource) => {
+          const c = r?.content || {}
+          const ge = c?.gameelement || {}
+          const se = Array.isArray(c?.studyElements) ? c.studyElements : []
+          const groupsCount = Array.isArray(ge?.groupSort?.groups) ? ge.groupSort.groups.length : 0
+          const groupItems = Array.isArray(ge?.groupSort?.groups)
+            ? ge.groupSort.groups.reduce((acc: number, g: { items?: unknown[] }) => acc + (Array.isArray(g.items) ? g.items.length : 0), 0)
+            : 0
+          const matchPairs = ge?.matchUp?.linesMode?.pairs ? ge.matchUp.linesMode.pairs.length : 0
+          return {
+            content: {
+              gameelement: {
+                quiz: ge?.quiz ? { questions: Array.isArray(ge.quiz.questions) ? ge.quiz.questions.length : 0 } : undefined,
+                matchUp: ge?.matchUp ? { pairs: matchPairs } : undefined,
+                groupSort: ge?.groupSort ? { groups: groupsCount, items: groupItems } : undefined,
+                openTheBox: ge?.openTheBox ? { items: Array.isArray(ge.openTheBox.items) ? ge.openTheBox.items.length : 0 } : undefined,
+                anagram: ge?.anagram ? { items: Array.isArray(ge.anagram.items) ? ge.anagram.items.length : 0 } : undefined,
+                findTheMatch: ge?.findTheMatch ? { pairs: Array.isArray(ge.findTheMatch.pairs) ? ge.findTheMatch.pairs.length : 0 } : undefined,
+              },
+              studyElements: se.map((el: StudyElement) => el?.type).filter(Boolean),
+            },
+          }
+        }
+        console.groupCollapsed('Recursos (ordenados y resumidos)')
+        sorted.forEach((r, idx) => {
+          console.log(idx, summarize(r))
+        })
+        console.groupEnd()
+      } catch (err) { console.warn('Progress summarize log error:', err) }
     } catch (e) {
       console.error('Error cargando recursos para la línea de tiempo:', e)
       setError('No se pudo cargar la línea de tiempo')
     } finally {
       setLoading(false)
     }
-  }
-
-  useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    loadResources()
   }, [user?.id])
 
-  // Suscripción en tiempo real a creaciones/actualizaciones/borrados del usuario
+  // Suscripción en tiempo real a creaciones/actualizaciones/borrados del usuario (incluye carga inicial)
   useEffect(() => {
     if (!user?.id) return
+    void loadResources()
     const channel = supabase
       .channel(`progress-resources-${user.id}`)
       .on(
@@ -60,11 +88,11 @@ export default function Progress() {
         () => { void loadResources() }
       )
       .subscribe()
-    return () => { try { supabase.removeChannel(channel) } catch {} }
-  }, [user?.id])
+    return () => { try { supabase.removeChannel(channel) } catch (err) { console.warn('removeChannel error:', err) } }
+  }, [user?.id, loadResources])
 
   const handleSignOut = async () => {
-    try { await signOut(); navigate('/login') } catch {}
+    try { await signOut(); navigate('/login') } catch (err) { console.warn('signOut error:', err) }
   }
 
   const formatDate = (iso: string) => {
@@ -112,7 +140,7 @@ export default function Progress() {
         <Box bg={sidebarBg} borderRight="1px" borderColor={borderColor} w="250px" h="calc(100vh - 60px)" position="sticky" top="60px" p={4}>
           <VStack spacing={2} align="stretch">
             {sidebarItems.map((item) => (
-              <Flex key={item.id} align="center" gap={3} px={4} py={3} borderRadius="lg" cursor="pointer" bg={item.id === 'dashboard' ? 'transparent' : 'transparent'} color={'gray.600'} _hover={{ bg: 'gray.100' }} transition="all 0.2s" onClick={() => { try { window.scrollTo({ top: 0, behavior: 'auto' }) } catch {}; navigate(item.to) }} w="full">
+              <Flex key={item.id} align="center" gap={3} px={4} py={3} borderRadius="lg" cursor="pointer" bg={item.id === 'dashboard' ? 'transparent' : 'transparent'} color={'gray.600'} _hover={{ bg: 'gray.100' }} transition="all 0.2s" onClick={() => { try { window.scrollTo({ top: 0, behavior: 'auto' }) } catch (err) { console.warn('scroll error:', err) }; navigate(item.to) }} w="full">
                 <Icon as={item.icon} boxSize={5} />
                 <Text fontSize="sm" fontWeight={'medium'}>{item.label}</Text>
               </Flex>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Box, Heading, Text, Card, CardBody, VStack, HStack, Button, Badge } from '@chakra-ui/react'
 import type { QuizContent } from '../../services/types'
 
@@ -14,13 +14,36 @@ const Quiz: React.FC<QuizProps> = ({ content, onComplete }) => {
   const [answers, setAnswers] = useState<number[]>([])
   const [finished, setFinished] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)
+  // Opciones barajadas y posición del índice correcto dentro del arreglo barajado
+  const [displayOptions, setDisplayOptions] = useState<string[]>([])
+  const [correctIdxShuffled, setCorrectIdxShuffled] = useState<number>(0)
 
   const total = content.questions.length
   const q = content.questions[currentIdx]
 
+  // Barajar opciones cuando cambia la pregunta actual
+  useEffect(() => {
+    if (!q || !Array.isArray(q.options)) {
+      setDisplayOptions([])
+      setCorrectIdxShuffled(0)
+      return
+    }
+    const idxs = q.options.map((_, i) => i)
+    for (let i = idxs.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[idxs[i], idxs[j]] = [idxs[j], idxs[i]]
+    }
+    const shuffled = idxs.map(i => q.options[i])
+    const newCorrectPos = idxs.indexOf(q.correctIndex)
+    setDisplayOptions(shuffled)
+    setCorrectIdxShuffled(newCorrectPos >= 0 ? newCorrectPos : 0)
+    setSelected(null)
+    setShowFeedback(false)
+  }, [currentIdx, q])
+
   const submit = () => {
     if (selected == null) return
-    const isCorrect = selected === q.correctIndex
+    const isCorrect = selected === correctIdxShuffled
     setScore(prev => prev + (isCorrect ? 1 : 0))
     setAnswers(prev => {
       const next = [...prev]
@@ -35,9 +58,9 @@ const Quiz: React.FC<QuizProps> = ({ content, onComplete }) => {
       const details = content.questions.map((qq, idx) => {
         const chosen = (idx === currentIdx) ? selected : answers[idx]
         const chosenIndex = typeof chosen === 'number' ? chosen : -1
-        const chosenText = typeof chosen === 'number' ? qq.options[chosen] : ''
-        const correctIndex = qq.correctIndex
-        const correctText = qq.options[correctIndex]
+        const chosenText = typeof chosen === 'number' ? displayOptions[chosen] : ''
+        const correctIndex = correctIdxShuffled
+        const correctText = displayOptions[correctIndex]
         return {
           prompt: qq.prompt,
           chosenIndex,
@@ -48,7 +71,7 @@ const Quiz: React.FC<QuizProps> = ({ content, onComplete }) => {
           explanation: qq.explanation
         }
       })
-      const finalScore = (selected === q.correctIndex) ? score + 1 : score
+      const finalScore = (selected === correctIdxShuffled) ? score + 1 : score
       onComplete?.({ total, correct: finalScore, details })
     }
   }
@@ -70,9 +93,10 @@ const Quiz: React.FC<QuizProps> = ({ content, onComplete }) => {
             </HStack>
             <Text>{q.prompt}</Text>
             <VStack align="stretch" spacing={2}>
-              {q.options.map((opt, idx) => {
+              {displayOptions.map((opt, idx) => {
+                const sanitized = opt.replace(/^\s*\(?[A-Za-z]\)?\s*[.\-:)]\s*/, '').trim()
                 const isSelected = selected === idx
-                const isCorrect = idx === q.correctIndex
+                const isCorrect = idx === correctIdxShuffled
                 let variant: 'solid' | 'outline' = 'outline'
                 let colorScheme: string = 'gray'
                 let prefix = ''
@@ -97,11 +121,11 @@ const Quiz: React.FC<QuizProps> = ({ content, onComplete }) => {
                   <Button
                     key={idx}
                     variant={variant}
-                    colorScheme={colorScheme as any}
+                    colorScheme={colorScheme}
                     onClick={() => !showFeedback && !finished && setSelected(idx)}
                     isDisabled={showFeedback || finished}
                   >
-                    {prefix}{opt}
+                    {prefix}{sanitized}
                   </Button>
                 )
               })}
@@ -120,9 +144,9 @@ const Quiz: React.FC<QuizProps> = ({ content, onComplete }) => {
                       const details = content.questions.map((qq, idx) => {
                         const chosen = answers[idx]
                         const chosenIndex = typeof chosen === 'number' ? chosen : -1
-                        const chosenText = typeof chosen === 'number' ? qq.options[chosen] : ''
-                        const correctIndex = qq.correctIndex
-                        const correctText = qq.options[correctIndex]
+                        const chosenText = typeof chosen === 'number' ? displayOptions[chosen] : ''
+                        const correctIndex = correctIdxShuffled
+                        const correctText = displayOptions[correctIndex]
                         return {
                           prompt: qq.prompt,
                           chosenIndex,
@@ -143,7 +167,7 @@ const Quiz: React.FC<QuizProps> = ({ content, onComplete }) => {
             {showFeedback && (
               <Box mt={3} p={3} borderWidth="1px" borderRadius="md" borderColor="green.300" bg="green.50">
                 <Text fontWeight="bold">Respuesta correcta:</Text>
-                <Text>{q.options[q.correctIndex]}</Text>
+                <Text>{displayOptions[correctIdxShuffled]}</Text>
                 {q.explanation && (
                   <>
                     <Text fontWeight="bold" mt={2}>Justificación:</Text>

@@ -6,7 +6,7 @@ import { generateInitialDebate, generateDebateRound } from '../../services/debat
 interface DebateProps {
   title: string
   content: DebateContent
-  onComplete: () => void
+  onComplete: (level: number) => void
 }
 
 export default function Debate({ title, content, onComplete }: DebateProps) {
@@ -17,6 +17,7 @@ export default function Debate({ title, content, onComplete }: DebateProps) {
   const [conInput, setConInput] = useState<string>('')
   const [dynamicTitle, setDynamicTitle] = useState<string>(title)
   const [loading, setLoading] = useState<boolean>(false)
+  const [level, setLevel] = useState<number>(0)
   const cardBg = useColorModeValue('white', 'gray.800')
 
   useEffect(() => {
@@ -38,13 +39,14 @@ export default function Debate({ title, content, onComplete }: DebateProps) {
     if (!userOpinion) return
     setLoading(true)
     try {
-      const { pro, con } = await generateDebateRound(question, userOpinion, side)
+      setQuestion(userOpinion)
+      const { pro, con } = await generateDebateRound(userOpinion, userOpinion, side)
       setProOpinion(pro)
       setConOpinion(con)
       if (side === 'pro') setProInput('')
       else setConInput('')
-      // La respuesta del usuario pasa a ser el título visible del debate
-      setDynamicTitle(userOpinion)
+      setDynamicTitle(title)
+      setLevel((n) => n + 1)
     } finally {
       setLoading(false)
     }
@@ -55,6 +57,7 @@ export default function Debate({ title, content, onComplete }: DebateProps) {
       <CardBody>
         <VStack align="stretch" spacing={4}>
           <Text fontSize="xl" fontWeight="bold">Debate: {dynamicTitle || title}</Text>
+          <Text fontSize="sm" color="gray.600">Nivel del debate: {level}</Text>
           {content.instructions && (
             <Text fontSize="sm" color="gray.700">{content.instructions}</Text>
           )}
@@ -67,28 +70,28 @@ export default function Debate({ title, content, onComplete }: DebateProps) {
                 <Text fontSize="sm">{question || `¿Debatamos sobre ${content.topic} en ${content.subject}?`}</Text>
               </Box>
               <HStack align="start" spacing={4}>
-                <Box flex={1} p={3} borderWidth="1px" borderRadius="md" bg="green.50" borderColor="green.200">
-                  <Text fontSize="sm" fontWeight="semibold">A favor</Text>
-                  <Text fontSize="sm" mb={2}>{proOpinion}</Text>
-                  <Textarea size="sm" placeholder="Escribe tu argumento a favor…" value={proInput} onChange={e => setProInput(e.target.value)} isDisabled={loading} />
-                  <HStack justify="end" mt={2}>
-                    <Button size="sm" colorScheme="green" onClick={() => handleRespond('pro')} isLoading={loading}>Responder</Button>
-                  </HStack>
-                </Box>
-                <Box flex={1} p={3} borderWidth="1px" borderRadius="md" bg="red.50" borderColor="red.200">
-                  <Text fontSize="sm" fontWeight="semibold">En contra</Text>
-                  <Text fontSize="sm" mb={2}>{conOpinion}</Text>
-                  <Textarea size="sm" placeholder="Escribe tu argumento en contra…" value={conInput} onChange={e => setConInput(e.target.value)} isDisabled={loading} />
-                  <HStack justify="end" mt={2}>
-                    <Button size="sm" colorScheme="red" onClick={() => handleRespond('con')} isLoading={loading}>Responder</Button>
-                  </HStack>
-                </Box>
-              </HStack>
-              <HStack justify="flex-end">
-                <Button onClick={onComplete} variant="outline">Finalizar</Button>
-              </HStack>
-            </>
-          )}
+              <Box flex={1} p={3} borderWidth="1px" borderRadius="md" bg="green.50" borderColor="green.200">
+                <Text fontSize="sm" fontWeight="semibold">A favor</Text>
+                <Text fontSize="sm" mb={2}>{proOpinion}</Text>
+                <Textarea size="sm" placeholder="Escribe tu argumento a favor…" value={proInput} onChange={e => setProInput(e.target.value)} isDisabled={loading || !!conInput.trim()} />
+                <HStack justify="end" mt={2}>
+                    <Button size="sm" colorScheme="green" onClick={() => handleRespond('pro')} isDisabled={loading || !proInput.trim() || !!conInput.trim()} isLoading={loading}>Responder</Button>
+                </HStack>
+              </Box>
+              <Box flex={1} p={3} borderWidth="1px" borderRadius="md" bg="red.50" borderColor="red.200">
+                <Text fontSize="sm" fontWeight="semibold">En contra</Text>
+                <Text fontSize="sm" mb={2}>{conOpinion}</Text>
+                <Textarea size="sm" placeholder="Escribe tu argumento en contra…" value={conInput} onChange={e => setConInput(e.target.value)} isDisabled={loading || !!proInput.trim()} />
+                <HStack justify="end" mt={2}>
+                    <Button size="sm" colorScheme="red" onClick={() => handleRespond('con')} isDisabled={loading || !conInput.trim() || !!proInput.trim()} isLoading={loading}>Responder</Button>
+                </HStack>
+              </Box>
+            </HStack>
+            <HStack justify="flex-end">
+              <Button onClick={() => onComplete(level)} variant="outline">Finalizar</Button>
+            </HStack>
+          </>
+        )}
         </VStack>
       </CardBody>
     </Card>

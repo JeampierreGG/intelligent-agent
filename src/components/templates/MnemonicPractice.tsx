@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Box, VStack, Text, Input, Button, HStack, Card, CardBody, useColorModeValue, Divider } from '@chakra-ui/react'
 import type { StudyMnemonicContent } from '../../services/types'
 
@@ -12,7 +12,16 @@ interface MnemonicPracticeProps {
 export default function MnemonicPractice({ content, mnemonicText, onComplete, renderContinueButton }: MnemonicPracticeProps) {
   const borderColor = useColorModeValue('gray.200', 'gray.700')
   const cardBg = useColorModeValue('white', 'gray.800')
-  const [answers, setAnswers] = useState<string[]>(Array(content.items.length).fill(''))
+  // Barajar aleatoriamente el orden de las definiciones para la práctica
+  const shuffledItems = useMemo(() => {
+    const arr = [...content.items]
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[arr[i], arr[j]] = [arr[j], arr[i]]
+    }
+    return arr
+  }, [content.items])
+  const [answers, setAnswers] = useState<string[]>(() => Array(shuffledItems.length).fill(''))
   const [submitting, setSubmitting] = useState<boolean>(false)
   const [graded, setGraded] = useState<boolean>(false)
   const [results, setResults] = useState<Array<{ prompt: string; answer: string; userAnswer: string; correct: boolean }>>([])
@@ -29,13 +38,13 @@ export default function MnemonicPractice({ content, mnemonicText, onComplete, re
 
   const gradeAll = () => {
     setSubmitting(true)
-    const r = content.items.map((it, idx) => {
+    const r = shuffledItems.map((it, idx) => {
       const ua = (answers[idx] || '').trim()
       // Mostrar la DEFINICIÓN y evaluar que el usuario escriba la RESPUESTA correcta (prompt)
       const correct = ua.length > 0 && normalizeText(ua) === normalizeText(it.prompt)
       return { prompt: it.prompt, answer: it.answer, userAnswer: ua, correct }
     })
-    const s = Math.round(100 * (r.filter(x => x.correct).length / content.items.length))
+    const s = Math.round(100 * (r.filter(x => x.correct).length / shuffledItems.length))
     setResults(r)
     setScore(s)
     setGraded(true)
@@ -43,18 +52,7 @@ export default function MnemonicPractice({ content, mnemonicText, onComplete, re
     setSubmitting(false)
   }
 
-  const skipAndLosePoints = () => {
-    // Marcar todos los restantes como incorrectos
-    const r = content.items.map((it, idx) => {
-      const ua = (answers[idx] || '').trim()
-      const correct = false
-      return { prompt: it.prompt, answer: it.answer, userAnswer: ua, correct }
-    })
-    setResults(r)
-    setScore(0)
-    setGraded(true)
-    onComplete(r, 0)
-  }
+  
 
   return (
     <Card bg={cardBg} shadow="sm" borderWidth="1px" borderColor={borderColor}>
@@ -70,7 +68,7 @@ export default function MnemonicPractice({ content, mnemonicText, onComplete, re
           {!graded ? (
             <>
               <Text fontSize="sm" color="gray.700">Escribe la respuesta correcta basándote en la definición y tu mnemotecnia.</Text>
-              {content.items.map((it, idx) => (
+              {shuffledItems.map((it, idx) => (
                 <VStack key={`mp-${idx}`} align="stretch" spacing={1}>
                   <Text fontSize="sm" fontWeight="semibold">{idx + 1}. Definición: {it.answer}</Text>
                   <Input placeholder="Escribe la respuesta correcta" value={answers[idx]} onChange={(e) => {
@@ -80,8 +78,7 @@ export default function MnemonicPractice({ content, mnemonicText, onComplete, re
                   }} />
                 </VStack>
               ))}
-              <HStack justify="space-between">
-                <Button colorScheme="red" variant="outline" onClick={skipAndLosePoints}>Omitir y perder puntos</Button>
+              <HStack justify="flex-end">
                 <Button colorScheme="blue" onClick={gradeAll} isLoading={submitting}>Calificar respuestas</Button>
               </HStack>
             </>

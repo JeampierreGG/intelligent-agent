@@ -92,7 +92,7 @@ const FindTheMatch: React.FC<FindTheMatchProps> = ({ content, onComplete }) => {
     const computed = Math.max(Math.round((distance / targetSpeedPxPerSec) * 1000), 2000)
     // Preferir la mayor entre la configuración y la calculada para que siempre llegue al extremo
     setAnimDuration(Math.max(base, computed))
-  }, [currentIdx, queue])
+  }, [currentIdx, queue, speeds])
 
   const handleAnswer = (affirmation: string) => {
     if (queue.length === 0) return
@@ -140,15 +140,15 @@ const FindTheMatch: React.FC<FindTheMatchProps> = ({ content, onComplete }) => {
           <VStack align="stretch" spacing={4}>
             <Box p={3} borderWidth="1px" borderRadius="md" bg="white">
               <Text fontSize="md" fontWeight="semibold" textAlign="center">Concepto</Text>
-              <Box ref={containerRef} position="relative" overflow="hidden" height="40px">
+              <Box ref={containerRef} position="relative" overflow="hidden" height="56px">
                 <Text
                   ref={textRef}
                   key={`concept-${currentIdx}-${queue[currentIdx].concept}`}
                   fontSize="lg"
-                  whiteSpace="nowrap"
+                  noOfLines={2}
                   position="absolute"
                   left={0}
-                  style={{ ['--fromX' as any]: `${fromX}px`, ['--toX' as any]: `${toX}px` }}
+                  style={{ '--fromX': `${fromX}px`, '--toX': `${toX}px` } as React.CSSProperties & { '--fromX': string; '--toX': string }}
                   sx={{
                     animation: `${slideLR} ${animDuration}ms linear`,
                     animationPlayState: feedback.type !== 'none' ? 'paused' : 'running',
@@ -192,7 +192,9 @@ const FindTheMatch: React.FC<FindTheMatchProps> = ({ content, onComplete }) => {
                     onClick={() => handleAnswer(a)}
                     isDisabled={feedback.type !== 'none'}
                   >
-                    {isCorrectSel ? '✓ ' : (isIncorrectSel ? '✗ ' : '')}{a}
+                    <Text as="span" noOfLines={2}>
+                      {isCorrectSel ? '✓ ' : (isIncorrectSel ? '✗ ' : '')}{a}
+                    </Text>
                   </Button>
                 )
               })}
@@ -208,14 +210,14 @@ const FindTheMatch: React.FC<FindTheMatchProps> = ({ content, onComplete }) => {
                 onClick={() => {
                   // Omitir el elemento: los restantes cuentan como incorrectos
                   const remainingIncorrect = queue.map(p => ({ concept: p.concept, expected: p.affirmation, correct: false }))
-                  const finalDetails = [...results, ...remainingIncorrect]
+                  const finalDetails: Array<{ concept: string; chosen?: string; expected: string; correct: boolean }> = [...results, ...remainingIncorrect]
                   // Evitar continuar animaciones
                   if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null }
                   setQueue([])
                   setAffirmations([])
                   setCurrentIdx(0)
                   setFeedback({ type: 'none', affirmation: null })
-                  onComplete?.(finalDetails as any, true)
+                  onComplete?.(finalDetails, true)
                 }}
               >Omitir y perder puntos</Button>
             </HStack>

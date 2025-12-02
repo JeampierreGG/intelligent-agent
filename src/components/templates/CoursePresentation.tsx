@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Box, Heading, Text, HStack, VStack, Button, SlideFade } from '@chakra-ui/react'
 import type { StudyCoursePresentationContent } from '../../services/types'
 
@@ -21,13 +21,28 @@ const CoursePresentation: React.FC<CoursePresentationProps> = ({ title, content,
   const goPrev = () => { if (idx > 0) { setDirection('prev'); setIdx(idx - 1) } }
 
   const current = content.slides[idx]
+  const sanitizedText = useMemo(() => {
+    const t = current?.text || ''
+    const noSources = t.replace(/Fuentes:?\s*[\s\S]*$/i, '')
+    const noUrls = noSources.replace(/https?:\/\/\S+/gi, '')
+    const rawLines = noUrls
+      .split(/\r?\n|;|•|\u2022/g)
+      .map(s => s.trim())
+      .filter(Boolean)
+    const source = rawLines.length > 0 ? rawLines : [noUrls]
+    const cleaned = source
+      .map(line => line.replace(/^\s*(?:\(?\d{1,3}\)?[-.)(–—]\s+|[-•\u2022]\s+|[A-Za-z]\)\s+)/, '').trim())
+      .filter(s => s.length > 0)
+      .slice(0, 5)
+    return cleaned.join('\n')
+  }, [current])
 
   // Al llegar al último slide, activar el botón externo de "Continuar" a través de onCompleted
   const [lastNotified, setLastNotified] = useState(false)
   useEffect(() => {
     if (!lastNotified && idx === total - 1) {
       setLastNotified(true)
-      onCompleted && onCompleted()
+      onCompleted?.()
     }
   }, [idx, total, lastNotified, onCompleted])
 
@@ -45,7 +60,7 @@ const CoursePresentation: React.FC<CoursePresentationProps> = ({ title, content,
         <SlideFade in key={idx} offsetX={direction === 'next' ? 32 : -32} offsetY={0}>
           <Box bg="rgba(255,255,255,0.9)" borderRadius="md" p={4} boxShadow="md" mb={-3}>
             <Heading size="sm" mb={2}>{current.title}</Heading>
-            <Text color="gray.800" whiteSpace="pre-line">{current.text}</Text>
+            <Text color="gray.800" whiteSpace="pre-line">{sanitizedText}</Text>
           </Box>
         </SlideFade>
         <HStack justify="space-between" mb={4}>

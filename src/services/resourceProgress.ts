@@ -21,8 +21,14 @@ export interface ResourceProgressData {
   studyItemCompleted?: boolean
   mnemonicPracticeCompleted?: boolean
   mnemonicPracticeConfirmed?: boolean
+  timelineConfirmed?: boolean
+  timelineEventChecked?: boolean[]
+  coursePresentationConfirmed?: boolean
+  accordionNotesConfirmed?: boolean
+  mnemonicCreatorConfirmed?: boolean
   linesCompleted?: boolean
   debateCompleted?: boolean
+  debateLevel?: number
   imagesCompleted?: boolean
   // Flags de confirmación al presionar "Continuar" para contabilizar puntuación
   quizConfirmed?: boolean

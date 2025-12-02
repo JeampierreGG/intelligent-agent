@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+// Temporizador y sesiones eliminados: se exportan funciones no-op para mantener compatibilidad
 
 export type ResourceSession = {
   id: string
@@ -10,146 +10,37 @@ export type ResourceSession = {
   accumulated_seconds: number | null
 }
 
-export async function getActiveResourceSession(userId: string, resourceId: string): Promise<ResourceSession | null> {
-  const { data, error } = await supabase
-    .from('educational_resource_sessions')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('resource_id', resourceId)
-    .is('ended_at', null)
-    .order('started_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  if (error) {
-    console.error('Error fetching active session:', error)
-    return null
-  }
-  return data as ResourceSession | null
+export async function getActiveResourceSession(_userId: string, _resourceId: string): Promise<ResourceSession | null> {
+  void _userId; void _resourceId;
+  return null
 }
 
-export async function getActiveSessionsForUser(userId: string): Promise<ResourceSession[]> {
-  const { data, error } = await supabase
-    .from('educational_resource_sessions')
-    .select('*')
-    .eq('user_id', userId)
-    .is('ended_at', null)
-
-  if (error) {
-    console.error('Error fetching active sessions for user:', error)
-    return []
-  }
-  return (data || []) as ResourceSession[]
+export async function getActiveSessionsForUser(_userId: string): Promise<ResourceSession[]> {
+  void _userId;
+  return []
 }
 
-export async function startResourceSession(userId: string, resourceId: string): Promise<ResourceSession | null> {
-  const { data, error } = await supabase
-    .from('educational_resource_sessions')
-    .insert({ user_id: userId, resource_id: resourceId })
-    .select('*')
-    .single()
-
-  if (error) {
-    console.error('Error starting resource session:', error)
-    return null
-  }
-  return data as ResourceSession
+export async function startResourceSession(_userId: string, _resourceId: string): Promise<ResourceSession | null> {
+  void _userId; void _resourceId;
+  return null
 }
 
-export async function endResourceSession(sessionId: string): Promise<boolean> {
-  const { error } = await supabase
-    .from('educational_resource_sessions')
-    .update({ ended_at: new Date().toISOString() })
-    .eq('id', sessionId)
-
-  if (error) {
-    console.error('Error ending resource session:', error)
-    return false
-  }
+export async function endResourceSession(_sessionId: string): Promise<boolean> {
+  void _sessionId;
   return true
 }
 
-/**
- * Suma el tiempo total de estudio (en segundos) de todas las sesiones de un usuario.
- * Considera duration_seconds cuando esté disponible; si no, calcula con started_at/ended_at
- * y agrega accumulated_seconds cuando aplique. Incluye sesiones activas sumando el tiempo
- * transcurrido desde started_at.
- */
-export async function getUserTotalStudySeconds(userId: string): Promise<number> {
-  try {
-    const { data, error } = await supabase
-      .from('educational_resource_sessions')
-      .select('started_at, ended_at, duration_seconds, accumulated_seconds')
-      .eq('user_id', userId)
-
-    if (error) throw error
-    const now = Date.now()
-    let total = 0
-    for (const row of data || []) {
-      const duration = (row as any).duration_seconds as number | null
-      const accum = (row as any).accumulated_seconds as number | null
-      const started = (row as any).started_at ? new Date((row as any).started_at).getTime() : null
-      const ended = (row as any).ended_at ? new Date((row as any).ended_at).getTime() : null
-      if (typeof duration === 'number' && !isNaN(duration)) {
-        total += Math.max(0, duration)
-      } else if (started) {
-        if (ended) {
-          total += Math.max(0, Math.floor((ended - started) / 1000)) + (accum || 0)
-        } else {
-          total += Math.max(0, Math.floor((now - started) / 1000)) + (accum || 0)
-        }
-      }
-    }
-    return total
-  } catch (e) {
-    console.warn('No se pudo obtener el tiempo total de estudio del usuario:', e)
-    return 0
-  }
+export async function getUserTotalStudySeconds(_userId: string): Promise<number> {
+  void _userId;
+  return 0
 }
 
-// Incrementa los segundos acumulados de una sesión activa (pausa controlada)
-export async function addAccumulatedSeconds(sessionId: string, additionalSeconds: number): Promise<boolean> {
-  if (!additionalSeconds || additionalSeconds <= 0) return true
-  const { data: row, error: selErr } = await supabase
-    .from('educational_resource_sessions')
-    .select('accumulated_seconds')
-    .eq('id', sessionId)
-    .maybeSingle()
-  if (selErr) {
-    console.error('Error leyendo accumulated_seconds:', selErr)
-    return false
-  }
-  const current = (row?.accumulated_seconds ?? 0) as number
-  const { error: updErr } = await supabase
-    .from('educational_resource_sessions')
-    .update({ accumulated_seconds: current + additionalSeconds })
-    .eq('id', sessionId)
-  if (updErr) {
-    console.error('Error actualizando accumulated_seconds:', updErr)
-    return false
-  }
-  return true 
+export async function addAccumulatedSeconds(_sessionId: string, _additionalSeconds: number): Promise<boolean> {
+  void _sessionId; void _additionalSeconds;
+  return true
 }
 
-// Obtiene el total de segundos acumulados por el usuario en un recurso (sumando todas las sesiones)
-export async function getTotalAccumulatedSecondsForResource(userId: string, resourceId: string): Promise<number> {
-  try {
-    const { data, error } = await supabase
-      .from('educational_resource_sessions')
-      .select('accumulated_seconds, ended_at')
-      .eq('user_id', userId)
-      .eq('resource_id', resourceId)
-    if (error) {
-      console.error('Hay un error sumando accumulated_seconds:', error)
-      return 0
-    }
-    const total = (data || []).reduce((sum: number, row: any) => {
-      const acc = (row?.accumulated_seconds ?? 0) as number
-      return sum + (acc || 0)
-    }, 0)
-    return total
-  } catch (e) {
-    console.error('Error obteniendo total de segundos acumulados:', e)
-    return 0
-  }
+export async function getTotalAccumulatedSecondsForResource(_userId: string, _resourceId: string): Promise<number> {
+  void _userId; void _resourceId;
+  return 0
 }

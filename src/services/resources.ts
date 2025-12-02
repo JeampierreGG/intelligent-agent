@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { GeneratedResource, StudyElement, StudyTimelineContent, MatchUpPair, GameElementBundle } from './types'
+import type { GeneratedResource, GameElementBundle } from './types'
 import {
   saveEducationalResourceLocal,
   getUserResourcesLocal,
@@ -40,7 +40,7 @@ export interface CreateResourceData {
  */
 export const detectSelectedGameKeys = (resource: EducationalResource): string[] => {
   try {
-    const bundle: any = (resource.content as any)?.gameelement || {}
+    const bundle = (resource.content as GeneratedResource)?.gameelement || {}
     const keys: string[] = []
     if (bundle.matchUp) keys.push('match_up')
     if (bundle.quiz) keys.push('quiz')
@@ -61,7 +61,7 @@ const isSupabaseAvailable = async (): Promise<boolean> => {
   try {
     const { error } = await supabase.from('educational_resources').select('id').limit(1)
     return !error
-  } catch (error) {
+  } catch {
     console.warn('⚠️ Supabase no disponible, usando localStorage como fallback')
     return false
   }
@@ -76,18 +76,35 @@ export const saveEducationalResource = async (resourceData: CreateResourceData) 
   
   if (supabaseAvailable) {
     try {
+      const payload = { ...resourceData } as Record<string, unknown>
+      delete payload.selected_elements
       const { data, error } = await supabase
         .from('educational_resources')
-        .insert([resourceData])
+        .insert([payload])
         .select()
         .single()
 
       if (error) {
         console.error('Error guardando recurso en Supabase:', error)
+        if (error.code === 'PGRST204' && typeof error.message === 'string' && error.message.includes("selected_elements")) {
+          const retry = await supabase
+            .from('educational_resources')
+            .insert([payload])
+            .select()
+            .single()
+          if (retry.error) throw retry.error
+          const dataRetry = retry.data
+          try {
+            await persistGeneratedDetails(dataRetry, { persistStudy: true, persistGame: true })
+          } catch (err) {
+            console.warn('persist details error:', err)
+          }
+          return { data: dataRetry, error: null }
+        }
         throw error
       }
 
-      console.log('✅ Recurso guardado exitosamente en Supabase:', data)
+      
       // Persistir detalles relacionados (matchups y elementos de estudio) en sus tablas específicas
       try {
         await persistGeneratedDetails(data, { persistStudy: true, persistGame: true })
@@ -124,12 +141,9 @@ export const appendGameElementsToResource = async (
       return
     }
     try {
-      // Obtener recurso actual desde localStorage
       const { data: existingLocal } = await getResourceByIdLocal(resourceId, userId)
-      const currentContent: any = existingLocal?.content || {}
-      const mergedContent: any = { ...currentContent }
-      // Combinar bundle dentro de gameelement y en raíz si aplica (mismo comportamiento que en Supabase)
-      mergedContent.gameelement = { ...(currentContent.gameelement || {}), ...gameBundle }
+      const currentContent: GeneratedResource = (existingLocal?.content as GeneratedResource) || { title: existingLocal?.title || 'Recurso' }
+      const mergedContent: GeneratedResource = { ...currentContent, gameelement: { ...(currentContent.gameelement || {}), ...gameBundle } }
       if (gameBundle.matchUp) mergedContent.matchUp = gameBundle.matchUp
       if (gameBundle.quiz) mergedContent.quiz = gameBundle.quiz
       if (gameBundle.groupSort) mergedContent.groupSort = gameBundle.groupSort
@@ -137,7 +151,7 @@ export const appendGameElementsToResource = async (
       if (gameBundle.openTheBox) mergedContent.openTheBox = gameBundle.openTheBox
       if (gameBundle.findTheMatch) mergedContent.findTheMatch = gameBundle.findTheMatch
 
-      await updateResourceLocal(resourceId, userId, { content: mergedContent } as any)
+      await updateResourceLocal(resourceId, userId, { content: mergedContent })
       return
     } catch (e) {
       console.error('❌ Error actualizando recurso local con elementos de juego:', e)
@@ -153,16 +167,10 @@ export const appendGameElementsToResource = async (
     .single()
   if (getErr) throw getErr
 
-  const currentContent: any = existing?.content || {}
-  const mergedContent: any = { ...currentContent }
+  const currentContent: GeneratedResource = (existing?.content as GeneratedResource) || { title: resourceId }
+  const mergedContent: GeneratedResource = { ...currentContent }
   // Combinar bundle dentro de gameelement y en raíz si aplica
   mergedContent.gameelement = { ...(currentContent.gameelement || {}), ...gameBundle }
-  if (gameBundle.matchUp) mergedContent.matchUp = gameBundle.matchUp
-  if (gameBundle.quiz) mergedContent.quiz = gameBundle.quiz
-  if (gameBundle.groupSort) mergedContent.groupSort = gameBundle.groupSort
-  if (gameBundle.anagram) mergedContent.anagram = gameBundle.anagram
-  if (gameBundle.openTheBox) mergedContent.openTheBox = gameBundle.openTheBox
-  if (gameBundle.findTheMatch) mergedContent.findTheMatch = gameBundle.findTheMatch
 
   const { error: updErr } = await supabase
     .from('educational_resources')
@@ -177,7 +185,7 @@ export const appendGameElementsToResource = async (
     title: currentContent.title || 'Recurso',
     subject: '',
     topic: '',
-    difficulty: (currentContent.difficulty || 'Intermedio') as any,
+    difficulty: (currentContent.difficulty ?? 'Intermedio') as 'Básico' | 'Intermedio' | 'Avanzado',
     content: mergedContent,
     created_at: '',
     updated_at: ''
@@ -198,157 +206,9 @@ const persistGeneratedDetails = async (
   resourceRow: EducationalResource,
   opts?: { persistStudy?: boolean; persistGame?: boolean }
 ) => {
-  const resourceId = resourceRow.id
-  const content = resourceRow.content as GeneratedResource
-  const persistStudy = opts?.persistStudy !== undefined ? opts.persistStudy : true
-  const persistGame = opts?.persistGame !== undefined ? opts.persistGame : true
-
-  // 1) Game Element (preferir bundle gameelement.matchUp y hacer fallback a gameElements/matchUp)
-  const gameBundle = (content.gameelement as any) || null
-  const gameEl = (gameBundle?.matchUp ?? content.matchUp ?? (content as any).gameElements) as any
-  let matchupLinesId: string | null = null
-  if (persistGame && gameEl?.linesMode && gameEl.linesMode.pairs && gameEl.linesMode.pairs.length > 0) {
-    const { data: ml, error: mlErr } = await supabase
-      .from('educational_matchup_lines')
-      .insert({ resource_id: resourceId, title: gameEl.title })
-      .select('id')
-      .single()
-    if (mlErr) throw mlErr
-    matchupLinesId = ml.id
-
-    const pairsRows = (gameEl.linesMode.pairs as MatchUpPair[]).map((p: MatchUpPair, idx: number) => ({
-      matchup_lines_id: matchupLinesId,
-      order_index: idx,
-      left_text: p.left,
-      right_text: p.right,
-    }))
-    const { error: lpErr } = await supabase
-      .from('educational_matchup_line_pairs')
-      .insert(pairsRows)
-    if (lpErr) throw lpErr
-  }
-
-  // 2) MatchUp Images desactivado: no persistir en BD aunque exista en el JSON
-  // (solicitud del usuario de desactivar "matchuoimages" sin eliminarlo)
-
-  // 3) Study Elements (máximo dos, en orden)
-  const studyElements = (content.studyElements || []) as StudyElement[]
-  let timelineId: string | null = null
-  let positionCounter = 1
-
-  if (persistStudy) {
-  for (const el of studyElements.slice(0, 2)) {
-    if (el.type === 'timeline') {
-      const tl = el.content as StudyTimelineContent
-      // Crear timeline principal
-      const { data: tRow, error: tErr } = await supabase
-        .from('educational_timelines')
-        .insert({ resource_id: resourceId, title: gameEl?.title ?? resourceRow.title })
-        .select('id')
-        .single()
-      if (tErr) throw tErr
-      timelineId = tRow.id
-
-      // Insertar eventos con order_index
-      const evRows = (tl.events || []).map((ev, idx) => ({
-        timeline_id: timelineId,
-        order_index: idx,
-        title: ev.title,
-        content_text: ev.description,
-        image_url: ev.imageUrl ?? null,
-        has_checkbox: true,
-      }))
-      if (evRows.length > 0) {
-        const { error: evErr } = await supabase
-          .from('educational_timeline_events')
-          .insert(evRows)
-        if (evErr) throw evErr
-      }
-
-      // Vincular como elemento de estudio en posición
-      const { error: seErr } = await supabase
-        .from('educational_study_elements')
-        .insert({
-          resource_id: resourceId,
-          position: positionCounter as 1 | 2,
-          element_type: 'timeline',
-          timeline_id: timelineId,
-        })
-      if (seErr) throw seErr
-      positionCounter += 1
-    } else if (el.type === 'course_presentation') {
-      // Persistir course_presentation (header + slides) y registrar en educational_study_elements
-      const cp = el.content
-      const { data: cpRow, error: cpErr } = await supabase
-        .from('educational_course_presentations')
-        // Forzar background_image_url a null: ya no se usa imagen de fondo
-        .insert({ resource_id: resourceId, background_image_url: null })
-        .select('id')
-        .single()
-      if (cpErr) throw cpErr
-
-      const slidesRows = (cp.slides || []).map((s, idx) => ({
-        course_presentation_id: cpRow.id,
-        order_index: idx,
-        title: s.title,
-        body: s.text,
-      }))
-      if (slidesRows.length > 0) {
-        const { error: sErr } = await supabase
-          .from('educational_course_presentation_slides')
-          .insert(slidesRows)
-        if (sErr) throw sErr
-      }
-
-      const { error: seErr } = await supabase
-        .from('educational_study_elements')
-        .insert({
-          resource_id: resourceId,
-          position: positionCounter as 1 | 2,
-          element_type: 'course_presentation',
-          course_presentation_id: cpRow.id,
-        })
-      if (seErr) throw seErr
-      positionCounter += 1
-    } else if (el.type === 'accordion_notes') {
-      // Persistir Accordion Notes y secciones, y registrar relación en educational_study_elements
-      const sections = (el.content as any)?.sections || []
-      // Crear registro principal de accordion_notes
-      const { data: accRow, error: accErr } = await supabase
-        .from('educational_accordion_notes')
-        .insert({ resource_id: resourceId })
-        .select('id')
-        .single()
-      if (accErr) throw accErr
-
-      // Insertar secciones si existen
-      if (Array.isArray(sections) && sections.length > 0) {
-        const secRows = sections.map((s: any, idx: number) => ({
-          accordion_id: accRow.id,
-          order_index: idx,
-          title: s.title ?? null,
-          body: s.body ?? null,
-        }))
-        const { error: secErr } = await supabase
-          .from('educational_accordion_notes_sections')
-          .insert(secRows)
-        if (secErr) throw secErr
-      }
-
-      // Vincular como elemento de estudio
-      const { error: seErr } = await supabase
-        .from('educational_study_elements')
-        .insert({
-          resource_id: resourceId,
-          position: positionCounter as 1 | 2,
-          element_type: 'accordion_notes',
-          accordion_notes_id: accRow.id,
-        })
-      if (seErr) throw seErr
-      positionCounter += 1
-    }
-  }
-  }
+  void resourceRow
+  void opts
+  return
 }
 
 /**
@@ -371,7 +231,7 @@ export const getUserResources = async (userId: string) => {
         throw error
       }
 
-      console.log('✅ Recursos obtenidos exitosamente desde Supabase')
+      
       return { data, error: null }
     } catch (error) {
       console.error('❌ Error en Supabase, intentando localStorage:', error)

@@ -29,7 +29,7 @@ const Anagram: React.FC<AnagramProps> = ({ content, onComplete, renderContinueBu
     setResults(prev => prev.map((r, i) => (i === idx ? correct : r)))
   }
 
-  const handleFinish = () => {
+  const handleFinish = React.useCallback(() => {
     const computed = items.map((it, idx) => {
       const user = normalize(inputs[idx])
       const ans = normalize(it.answer)
@@ -40,14 +40,14 @@ const Anagram: React.FC<AnagramProps> = ({ content, onComplete, renderContinueBu
     setResults(computed.map(c => c.correct))
     setFinished(true)
     onComplete?.(computed)
-  }
+  }, [items, inputs, onComplete])
 
   // Si el usuario ya verificó todos los ítems, finalizar automáticamente para habilitar "Continuar"
   useEffect(() => {
     if (!finished && allChecked && items.length > 0) {
       handleFinish()
     }
-  }, [allChecked, finished, items.length])
+  }, [allChecked, finished, items.length, handleFinish])
 
   return (
     <VStack align="stretch" spacing={4}>

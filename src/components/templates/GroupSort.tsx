@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { Box, Heading, Text, SimpleGrid, Card, CardBody, VStack, HStack, Badge, Tag, TagLabel, CloseButton } from '@chakra-ui/react'
+import { Box, Heading, Text, SimpleGrid, Card, CardBody, VStack, HStack, Tag, TagLabel, CloseButton } from '@chakra-ui/react'
 import type { GroupSortContent } from '../../services/types'
 
 interface GroupSortProps {
@@ -9,7 +9,7 @@ interface GroupSortProps {
 
 const GroupSort: React.FC<GroupSortProps> = ({ content, onComplete }) => {
   // Máximo de 12 ítems totales, sin mínimo
-  const MAX_ITEMS = 12
+  const MAX_ITEMS = 6
   // Obtener un conjunto único de ítems desde la definición (cada ítem pertenece a un grupo correcto)
   const allItems = useMemo(() => {
     const set = new Set<string>()
@@ -47,11 +47,17 @@ const GroupSort: React.FC<GroupSortProps> = ({ content, onComplete }) => {
 
   const unplacedItems = allItems.filter(i => !placements[i])
 
+  const completionFiredRef = React.useRef(false)
   React.useEffect(() => {
-    if (placedCount === total) {
-      onComplete?.({ total, placed: placedCount, placements })
+    const allPlaced = placedCount === total && total > 0
+    if (allPlaced && !completionFiredRef.current) {
+      completionFiredRef.current = true
+      onComplete?.({ total, placed: placedCount, placements: { ...placements } })
     }
-  }, [placedCount, total, placements, onComplete])
+    if (!allPlaced && completionFiredRef.current) {
+      completionFiredRef.current = false
+    }
+  }, [placedCount, total])
 
   return (
     <Box>
@@ -82,7 +88,7 @@ const GroupSort: React.FC<GroupSortProps> = ({ content, onComplete }) => {
 
       {/* Grupos grandes como zonas de drop */}
       <SimpleGrid columns={[1, 2, 3]} spacing={4}>
-        {content.groups.map(group => {
+        {content.groups.slice(0, 2).map(group => {
           const itemsInGroup = allItems.filter(i => placements[i] === group.name)
           return (
             <Card key={group.name}
@@ -122,7 +128,7 @@ const GroupSort: React.FC<GroupSortProps> = ({ content, onComplete }) => {
 
       <Box mt={4}>
         <Text>Progreso: {placedCount} / {total} colocados</Text>
-        <Badge ml={2} colorScheme="purple">{content.subject} / {content.topic}</Badge>
+      
       </Box>
     </Box>
   )
