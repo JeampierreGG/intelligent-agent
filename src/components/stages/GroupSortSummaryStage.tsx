@@ -7,11 +7,13 @@ interface GroupSortSummaryStageProps {
 }
 
 export default function GroupSortSummaryStage({ results, continueLabel, onContinue }: GroupSortSummaryStageProps) {
+  const expected = Array.from(new Set(results.map(r => (r.expectedGroup || '').trim()).filter(n => !!n))).slice(0, 2)
   const grouped: Record<string, Array<{ item: string; correct: boolean; expectedGroup: string }>> = {}
+  expected.forEach(n => { grouped[n] = [] })
   results.forEach(r => {
     const key = r.chosenGroup || ''
     if (!key) return
-    if (!grouped[key]) grouped[key] = []
+    if (!expected.includes(key)) return
     grouped[key].push({ item: r.item, correct: r.correct, expectedGroup: r.expectedGroup })
   })
 

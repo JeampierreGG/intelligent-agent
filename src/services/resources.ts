@@ -76,7 +76,7 @@ export const saveEducationalResource = async (resourceData: CreateResourceData) 
   
   if (supabaseAvailable) {
     try {
-      const payload = { ...resourceData } as Record<string, unknown>
+      const payload = { ...resourceData, content: normalizeResourceGroupSort(resourceData.content) } as Record<string, unknown>
       delete payload.selected_elements
       const { data, error } = await supabase
         .from('educational_resources')
@@ -120,7 +120,7 @@ export const saveEducationalResource = async (resourceData: CreateResourceData) 
 
   // Fallback a localStorage
   console.log('📦 Usando localStorage como fallback para guardar recurso')
-  return await saveEducationalResourceLocal(resourceData as CreateLocalResourceData)
+  return await saveEducationalResourceLocal({ ...resourceData, content: normalizeResourceGroupSort(resourceData.content) } as CreateLocalResourceData)
 }
 
 /**
@@ -143,7 +143,8 @@ export const appendGameElementsToResource = async (
     try {
       const { data: existingLocal } = await getResourceByIdLocal(resourceId, userId)
       const currentContent: GeneratedResource = (existingLocal?.content as GeneratedResource) || { title: existingLocal?.title || 'Recurso' }
-      const mergedContent: GeneratedResource = { ...currentContent, gameelement: { ...(currentContent.gameelement || {}), ...gameBundle } }
+      const mergedContentRaw: GeneratedResource = { ...currentContent, gameelement: { ...(currentContent.gameelement || {}), ...gameBundle } }
+      const mergedContent: GeneratedResource = normalizeResourceGroupSort(mergedContentRaw)
       if (gameBundle.matchUp) mergedContent.matchUp = gameBundle.matchUp
       if (gameBundle.quiz) mergedContent.quiz = gameBundle.quiz
       if (gameBundle.groupSort) mergedContent.groupSort = gameBundle.groupSort
@@ -168,9 +169,10 @@ export const appendGameElementsToResource = async (
   if (getErr) throw getErr
 
   const currentContent: GeneratedResource = (existing?.content as GeneratedResource) || { title: resourceId }
-  const mergedContent: GeneratedResource = { ...currentContent }
+  const mergedContent: GeneratedResource = normalizeResourceGroupSort({ ...currentContent })
   // Combinar bundle dentro de gameelement y en raíz si aplica
   mergedContent.gameelement = { ...(currentContent.gameelement || {}), ...gameBundle }
+  mergedContent.groupSort = mergedContent.groupSort || mergedContent.gameelement?.groupSort
 
   const { error: updErr } = await supabase
     .from('educational_resources')
@@ -193,6 +195,28 @@ export const appendGameElementsToResource = async (
 
   // Persistir solo bloques de juego
   await persistGeneratedDetails(lightweightRow, { persistStudy: false, persistGame: true })
+}
+
+const normalizeResourceGroupSort = (content: GeneratedResource): GeneratedResource => {
+  const copy: GeneratedResource = { ...(content || {}) }
+  const src: import('./types').GroupSortContent | undefined = copy.gameelement?.groupSort || copy.groupSort
+  if (src && Array.isArray(src.groups)) {
+    const groups = src.groups.slice(0, 2)
+    let count = 0
+    const out = groups.map((g: { name: string; items: string[] }) => {
+      const items: string[] = []
+      for (const it of (Array.isArray(g.items) ? g.items : [])) {
+        if (count >= 6) break
+        items.push(String(it || ''))
+        count++
+      }
+      return { name: String(g.name || ''), items }
+    })
+    const normalized = { ...src, templateType: 'group_sort' as const, groups: out }
+    copy.groupSort = normalized
+    copy.gameelement = { ...(copy.gameelement || {}), groupSort: normalized }
+  }
+  return copy
 }
 
 /**

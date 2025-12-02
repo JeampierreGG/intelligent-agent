@@ -35,12 +35,13 @@ interface ResourceSummaryProps {
 }
 
 export default function ResourceSummary({ score, breakdown, openBoxResults, findMatchResults, quizResults, groupSortResults, groupNames, linesResults, anagramResults, debateLevel, onExit, onRetry }: ResourceSummaryProps) {
+  const validNames = (groupNames || []).slice(0, 2).filter(n => !!n)
   const grouped: Record<string, Array<{ item: string; correct: boolean; expectedGroup: string }>> = {}
-  groupNames.forEach(name => { grouped[name] = [] })
+  validNames.forEach(name => { grouped[name] = [] })
   groupSortResults.forEach(r => {
     const key = r.chosenGroup || ''
     if (!key) return
-    if (!grouped[key]) grouped[key] = []
+    if (!validNames.includes(key)) return
     grouped[key].push({ item: r.item, correct: r.correct, expectedGroup: r.expectedGroup })
   })
 

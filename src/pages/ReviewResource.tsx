@@ -11,7 +11,7 @@ import ResourceSummary from '../components/summaries/ResourceSummary'
 import { getResourceById } from '../services/resources'
 import type { EducationalResource } from '../services/resources'
 //
-import type { GeneratedResource } from '../services/types'
+import type { GeneratedResource, GroupSortContent } from '../services/types'
 import logoImage from '../assets/Logo-IA.png'
 
 type BreakdownItem = { name: string; weight: number; totalItems: number; correct: number; contribution: number }
@@ -40,11 +40,22 @@ export default function ReviewResource() {
   //
 
   // Derivar contenidos para mostrar nombres de grupos, etc.
-  const groupSortContent = useMemo(() => {
+  const groupSortContent = useMemo<GroupSortContent | null>(() => {
     const c = resource?.content as GeneratedResource | undefined
-    const bundle = c?.gameelement?.groupSort
-    const root = c?.groupSort
-    return bundle || root || null
+    const content = c?.gameelement?.groupSort || c?.groupSort || null
+    if (!content || !Array.isArray(content.groups)) return content
+    const groups = content.groups.slice(0, 2)
+    let count = 0
+    const out = groups.map(g => {
+      const items: string[] = []
+      for (const it of (Array.isArray(g.items) ? g.items : [])) {
+        if (count >= 6) break
+        items.push(it)
+        count++
+      }
+      return { name: g.name, items }
+    })
+    return { ...content, groups: out }
   }, [resource])
 
   useEffect(() => {
@@ -331,7 +342,7 @@ export default function ReviewResource() {
                       findMatchResults={snapshot?.findMatchResults || []}
                       quizResults={snapshot?.quizResults || []}
                       groupSortResults={snapshot?.groupSortResults || []}
-                      groupNames={groupSortContent?.groups?.map((g) => g.name) ?? []}
+                      groupNames={(groupSortContent?.groups ?? []).map((g: { name: string }) => g.name).filter((n: string) => !!n).slice(0, 2)}
                       linesResults={snapshot?.linesResults || []}
                       anagramResults={snapshot?.anagramResults || []}
                       debateLevel={snapshot?.debate_level ?? 0}

@@ -244,13 +244,28 @@ export default function PlayResource() {
         const matchUp: MatchUpContent | null = content?.gameelement?.matchUp || content?.matchUp || (content?.gameElements as MatchUpContent | null) || null
         const quiz: QuizContent | null = content?.gameelement?.quiz || content?.quiz || null
         const groupSort: GroupSortContent | null = content?.gameelement?.groupSort || content?.groupSort || null
+        const normalizeGroupSort = (gs: GroupSortContent | null): GroupSortContent | null => {
+          if (!gs || !Array.isArray(gs.groups)) return gs
+          const groups = gs.groups.slice(0, 2)
+          let count = 0
+          const out = groups.map(g => {
+            const items: string[] = []
+            for (const it of (Array.isArray(g.items) ? g.items : [])) {
+              if (count >= 6) break
+              items.push(String(it || ''))
+              count++
+            }
+            return { name: String(g.name || ''), items }
+          })
+          return { ...gs, groups: out, templateType: 'group_sort' }
+        }
         const openTheBox: OpenTheBoxContent | null = content?.gameelement?.openTheBox || content?.openTheBox || null
         const anagram: AnagramContent | null = content?.gameelement?.anagram || content?.anagram || null
         const findTheMatch: FindTheMatchContent | null = content?.gameelement?.findTheMatch || content?.findTheMatch || null
 
         setPlayingMatchUp(matchUp)
         setPlayingQuiz(quiz)
-        setPlayingGroupSort(groupSort)
+        setPlayingGroupSort(normalizeGroupSort(groupSort))
         setPlayingOpenBox(openTheBox)
         setPlayingAnagram(anagram)
         setPlayingFindTheMatch(findTheMatch)

@@ -129,6 +129,23 @@ const sanitizeGroupSort = (gs: GroupSortContent): GroupSortContent => {
   }
 }
 
+const normalizeGroupSortTwoGroups = (gs: GroupSortContent): GroupSortContent => {
+  const base = sanitizeGroupSort(gs)
+  const src = Array.isArray(base.groups) ? base.groups.slice(0, 2) : []
+  const out: Array<{ name: string; items: string[] }> = []
+  let count = 0
+  for (const g of src) {
+    const items: string[] = []
+    for (const it of (Array.isArray(g.items) ? g.items : [])) {
+      if (count >= 6) break
+      items.push(it)
+      count++
+    }
+    out.push({ name: g.name, items })
+  }
+  return { ...base, groups: out }
+}
+
 // Genera un prompt INTEGRADO: primero una línea de tiempo con información extensa ordenada por fecha,
 // y a partir de ese mismo contenido, actividades MatchUp (líneas e imágenes).
 const buildIntegratedPrompt = (formData: ResourceFormData, userAge: number): string => {
@@ -363,7 +380,7 @@ export async function generateMatchUpResource(formData: ResourceFormData): Promi
   try {
     const gsBlock = (apiBundle as GameElementBundle | undefined)?.groupSort ?? (typeof parsedUnknown === 'object' && parsedUnknown !== null ? (parsedUnknown as Record<string, unknown>).groupSort as GroupSortContent | undefined : undefined)
     if ((gsBlock as GroupSortContent | undefined)?.templateType === 'group_sort' && Array.isArray((gsBlock as GroupSortContent).groups) && (gsBlock as GroupSortContent).groups.length > 0) {
-      const cleaned = sanitizeGroupSort(gsBlock as GroupSortContent)
+      const cleaned = normalizeGroupSortTwoGroups(gsBlock as GroupSortContent)
       generated.gameelement = { ...(generated.gameelement || {}), groupSort: cleaned }
     }
   } catch (e) {
@@ -745,7 +762,7 @@ ${ageYears != null ? `- Edad estimada del estudiante: ${ageYears} años. Adapta 
     if (selectedGameKeys.includes('group_sort')) {
       const gs = (typeof parsed === 'object' && parsed !== null) ? (parsed as Record<string, unknown>).groupSort as GroupSortContent | undefined : undefined
       const valid = !!(Array.isArray(gs?.groups) && gs!.groups.length > 0)
-      if (valid) bundle.groupSort = sanitizeGroupSort({ ...(gs as GroupSortContent), templateType: 'group_sort', difficulty: selectedDifficulty })
+      if (valid) bundle.groupSort = normalizeGroupSortTwoGroups({ ...(gs as GroupSortContent), templateType: 'group_sort', difficulty: selectedDifficulty })
     }
     if (selectedGameKeys.includes('anagram')) {
       const ag = (typeof parsed === 'object' && parsed !== null) ? (parsed as Record<string, unknown>).anagram as AnagramContent | undefined : undefined
