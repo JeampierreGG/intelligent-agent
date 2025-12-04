@@ -72,7 +72,7 @@ export default function Debate({ title, content, onComplete }: DebateProps) {
               <HStack align="start" spacing={4}>
               <Box flex={1} p={3} borderWidth="1px" borderRadius="md" bg="green.50" borderColor="green.200">
                 <Text fontSize="sm" fontWeight="semibold">A favor</Text>
-                <Text fontSize="sm" mb={2}>{proOpinion}</Text>
+                <Text fontSize="sm" mb={2} whiteSpace="pre-wrap">{proOpinion}</Text>
                 <Textarea size="sm" placeholder="Escribe tu argumento a favor…" value={proInput} onChange={e => setProInput(e.target.value)} isDisabled={loading || !!conInput.trim()} />
                 <HStack justify="end" mt={2}>
                     <Button size="sm" colorScheme="green" onClick={() => handleRespond('pro')} isDisabled={loading || !proInput.trim() || !!conInput.trim()} isLoading={loading}>Responder</Button>
@@ -80,7 +80,7 @@ export default function Debate({ title, content, onComplete }: DebateProps) {
               </Box>
               <Box flex={1} p={3} borderWidth="1px" borderRadius="md" bg="red.50" borderColor="red.200">
                 <Text fontSize="sm" fontWeight="semibold">En contra</Text>
-                <Text fontSize="sm" mb={2}>{conOpinion}</Text>
+                <Text fontSize="sm" mb={2} whiteSpace="pre-wrap">{conOpinion}</Text>
                 <Textarea size="sm" placeholder="Escribe tu argumento en contra…" value={conInput} onChange={e => setConInput(e.target.value)} isDisabled={loading || !!proInput.trim()} />
                 <HStack justify="end" mt={2}>
                     <Button size="sm" colorScheme="red" onClick={() => handleRespond('con')} isDisabled={loading || !conInput.trim() || !!proInput.trim()} isLoading={loading}>Responder</Button>
