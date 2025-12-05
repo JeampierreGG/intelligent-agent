@@ -17,6 +17,8 @@ const Quiz: React.FC<QuizProps> = ({ content, onComplete }) => {
   // Opciones barajadas y posición del índice correcto dentro del arreglo barajado
   const [displayOptions, setDisplayOptions] = useState<string[]>([])
   const [correctIdxShuffled, setCorrectIdxShuffled] = useState<number>(0)
+  const [perQuestionOptions, setPerQuestionOptions] = useState<string[][]>([])
+  const [perQuestionCorrectIdx, setPerQuestionCorrectIdx] = useState<number[]>([])
 
   const total = content.questions.length
   const q = content.questions[currentIdx]
@@ -37,6 +39,16 @@ const Quiz: React.FC<QuizProps> = ({ content, onComplete }) => {
     const newCorrectPos = idxs.indexOf(q.correctIndex)
     setDisplayOptions(shuffled)
     setCorrectIdxShuffled(newCorrectPos >= 0 ? newCorrectPos : 0)
+    setPerQuestionOptions(prev => {
+      const next = prev.slice()
+      next[currentIdx] = shuffled
+      return next
+    })
+    setPerQuestionCorrectIdx(prev => {
+      const next = prev.slice()
+      next[currentIdx] = (newCorrectPos >= 0 ? newCorrectPos : 0)
+      return next
+    })
     setSelected(null)
     setShowFeedback(false)
   }, [currentIdx, q])
@@ -58,16 +70,17 @@ const Quiz: React.FC<QuizProps> = ({ content, onComplete }) => {
       const details = content.questions.map((qq, idx) => {
         const chosen = (idx === currentIdx) ? selected : answers[idx]
         const chosenIndex = typeof chosen === 'number' ? chosen : -1
-        const chosenText = typeof chosen === 'number' ? displayOptions[chosen] : ''
-        const correctIndex = correctIdxShuffled
-        const correctText = displayOptions[correctIndex]
+        const opts = perQuestionOptions[idx] || []
+        const corrIdx = (typeof perQuestionCorrectIdx[idx] === 'number') ? perQuestionCorrectIdx[idx] : 0
+        const chosenText = (typeof chosen === 'number' && opts[chosen] != null) ? opts[chosen] : ''
+        const correctText = opts[corrIdx] || ''
         return {
           prompt: qq.prompt,
           chosenIndex,
-          correctIndex,
+          correctIndex: corrIdx,
           chosenText,
           correctText,
-          correct: chosenIndex === correctIndex,
+          correct: chosenIndex === corrIdx,
           explanation: qq.explanation
         }
       })
@@ -144,16 +157,17 @@ const Quiz: React.FC<QuizProps> = ({ content, onComplete }) => {
                       const details = content.questions.map((qq, idx) => {
                         const chosen = answers[idx]
                         const chosenIndex = typeof chosen === 'number' ? chosen : -1
-                        const chosenText = typeof chosen === 'number' ? displayOptions[chosen] : ''
-                        const correctIndex = correctIdxShuffled
-                        const correctText = displayOptions[correctIndex]
+                        const opts = perQuestionOptions[idx] || []
+                        const corrIdx = (typeof perQuestionCorrectIdx[idx] === 'number') ? perQuestionCorrectIdx[idx] : 0
+                        const chosenText = (typeof chosen === 'number' && opts[chosen] != null) ? opts[chosen] : ''
+                        const correctText = opts[corrIdx] || ''
                         return {
                           prompt: qq.prompt,
                           chosenIndex,
-                          correctIndex,
+                          correctIndex: corrIdx,
                           chosenText,
                           correctText,
-                          correct: chosenIndex === correctIndex,
+                          correct: chosenIndex === corrIdx,
                           explanation: qq.explanation
                         }
                       })
