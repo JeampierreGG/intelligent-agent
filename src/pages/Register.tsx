@@ -256,7 +256,9 @@ export default function Register() {
                       _hover={{ borderColor: "gray.400" }}
                       _focus={{ borderColor: firstNameTouched && !nameValid ? "red.500" : "teal.500", boxShadow: firstNameTouched && !nameValid ? "0 0 0 1px red.500" : "0 0 0 1px teal.500" }}
                     />
-                    <FormErrorMessage>El nombre es requerido y solo debe contener letras</FormErrorMessage>
+                    <FormErrorMessage>
+                      <span style={{ whiteSpace: 'pre-line' }}>El nombre es obligatorio</span>
+                    </FormErrorMessage>
                   </FormControl>
                 </GridItem>
                 <GridItem>
@@ -283,7 +285,9 @@ export default function Register() {
                       _hover={{ borderColor: "gray.400" }}
                       _focus={{ borderColor: lastNameTouched && !lastValid ? "red.500" : "teal.500", boxShadow: lastNameTouched && !lastValid ? "0 0 0 1px red.500" : "0 0 0 1px teal.500" }}
                     />
-                    <FormErrorMessage>El apellido es requerido y solo debe contener letras</FormErrorMessage>
+                    <FormErrorMessage>
+                      <span style={{ whiteSpace: 'pre-line' }}>El apellido es obligatorio</span>
+                    </FormErrorMessage>
                   </FormControl>
                 </GridItem>
               </Grid>
@@ -307,7 +311,9 @@ export default function Register() {
                 <FormHelperText color="gray.500">
                   Usaremos este email para enviarte actualizaciones de tu progreso
                 </FormHelperText>
-                <FormErrorMessage>Ingresa un email válido</FormErrorMessage>
+                <FormErrorMessage>
+                  <span style={{ whiteSpace: 'pre-line' }}>Ingresa un email válido</span>
+                </FormErrorMessage>
               </FormControl>
 
               {/* Contraseñas */}
@@ -339,7 +345,11 @@ export default function Register() {
                         />
                       </InputRightElement>
                     </InputGroup>
-                    <FormErrorMessage>Debe tener al menos 8 caracteres con mayúsculas, minúsculas y números</FormErrorMessage>
+                    <FormErrorMessage>
+                      <span style={{ whiteSpace: 'pre-line' }}>
+                        {`Debe tener al menos 8 caracteres\ncon mayúsculas, minúsculas y números`}
+                      </span>
+                    </FormErrorMessage>
                   </FormControl>
                 </GridItem>
                 <GridItem>
@@ -369,12 +379,14 @@ export default function Register() {
                         />
                       </InputRightElement>
                     </InputGroup>
-                    <FormErrorMessage>Las contraseñas no coinciden</FormErrorMessage>
+                    <FormErrorMessage>
+                      <span style={{ whiteSpace: 'pre-line' }}>Las contraseñas no coinciden</span>
+                    </FormErrorMessage>
                   </FormControl>
                 </GridItem>
               </Grid>
-              <Text fontSize="sm" color="gray.500" w="100%" textAlign="left">
-                Mínimo 8 caracteres con mayúsculas, minúsculas y números
+              <Text fontSize="sm" color="gray.500" w="100%" textAlign="left" whiteSpace="pre-line">
+                {`Mínimo 8 caracteres\ncon mayúsculas, minúsculas y números`}
               </Text>
 
               {/* Fecha de Nacimiento */}
@@ -433,7 +445,9 @@ export default function Register() {
                     ))}
                   </Select>
                 </Grid>
-                <FormErrorMessage>Fecha de nacimiento inválida. La edad mínima es 10 años.</FormErrorMessage>
+                <FormErrorMessage>
+                  <span style={{ whiteSpace: 'pre-line' }}>Fecha de nacimiento inválida. La edad mínima es 10 años.</span>
+                </FormErrorMessage>
               </FormControl>
 
               {/* Nivel Académico */}
@@ -457,7 +471,9 @@ export default function Register() {
                   <option value="Universitario">Universitario</option>
                   <option value="Posgrado">Posgrado</option>
                 </Select>
-                <FormErrorMessage>Selecciona tu nivel académico</FormErrorMessage>
+                <FormErrorMessage>
+                  <span style={{ whiteSpace: 'pre-line' }}>Selecciona tu nivel académico</span>
+                </FormErrorMessage>
               </FormControl>
 
               {/* Checkbox de Términos */}
@@ -480,7 +496,9 @@ export default function Register() {
                     {' '}*
                   </Text>
                 </Checkbox>
-                <FormErrorMessage>Debes aceptar los términos y condiciones y la política de privacidad</FormErrorMessage>
+                <FormErrorMessage>
+                  <span style={{ whiteSpace: 'pre-line' }}>Debes aceptar los términos y condiciones y la política de privacidad</span>
+                </FormErrorMessage>
               </FormControl>
 
               {/* Botón de Registro */}
