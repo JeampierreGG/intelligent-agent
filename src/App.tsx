@@ -11,6 +11,8 @@ import ReviewResource from './pages/ReviewResource'
 import { DashboardProtectedRoute } from './components/DashboardProtectedRoute'
   import Progress from './pages/Progress'
   import PlayResource from './pages/PlayResource'
+import Terms from './pages/Terms'
+import Privacy from './pages/Privacy'
 
 // Componente para rutas públicas (solo accesibles si no está logueado)
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -40,14 +42,17 @@ function App() {
                 </PublicRoute>
               } 
             />
-            <Route 
-              path="/register" 
-              element={
-                <PublicRoute>
-                  <Register />
-                </PublicRoute>
-              } 
-            />
+          <Route 
+            path="/register" 
+            element={
+              <PublicRoute>
+                <Register />
+              </PublicRoute>
+            } 
+          />
+
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
 
             <Route 
               path="/dashboard" 
