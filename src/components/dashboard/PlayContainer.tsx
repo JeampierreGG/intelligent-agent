@@ -116,9 +116,11 @@ export default function PlayContainer(props: PlayContainerProps) {
     <VStack align="stretch" spacing={4}>
       <HStack justify="space-between">
         <Text fontSize="2xl" fontWeight="bold">{headerTitle}</Text>
-        <HStack>
-          <Text as="button" fontSize="sm" color="blue.600" onClick={() => { props.onExitOpen() }}>Salir</Text>
-        </HStack>
+        {matchUpStage !== 'summary' && matchUpStage !== 'debate' && (
+          <HStack>
+            <Text as="button" fontSize="sm" color="blue.600" onClick={() => { props.onExitOpen() }}>Salir</Text>
+          </HStack>
+        )}
       </HStack>
       {(() => {
         const res = resources.find(r => r.id === playingResourceId)

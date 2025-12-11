@@ -28,7 +28,9 @@ export default function AppHeader({ user, onSignOut }: AppHeaderProps) {
         <Menu>
           <MenuButton as={Box} cursor="pointer" _hover={{ bg: 'gray.50' }} px={3} py={2} borderRadius="md" transition="all 0.2s" minW="fit-content" w="auto" height="40px">
             <Flex direction="row" align="center" gap={2} height="100%">
-              <Avatar size="sm" name={`${firstName || ''} ${lastName || ''}`.trim() || email} bg="blue.500" flexShrink={0} />
+              <Avatar size="sm" bg="blue.500" flexShrink={0}>
+             
+              </Avatar>
               <Text fontSize="sm" fontWeight="medium" whiteSpace="nowrap" flexShrink={0}>
                 {(() => {
                   const base = firstName || (email.split('@')[0] || '')
