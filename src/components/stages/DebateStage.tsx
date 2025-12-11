@@ -1,4 +1,4 @@
-import { HStack, Button } from '@chakra-ui/react'
+
 import Debate from '../../components/templates/Debate'
 import type { DebateContent } from '../../services/types'
 
@@ -11,7 +11,7 @@ interface DebateStageProps {
   onSkip: () => void
 }
 
-export default function DebateStage({ title, content, attemptId, resourceId, onComplete, onSkip }: DebateStageProps) {
+export default function DebateStage({ title, content, attemptId, resourceId, onComplete }: DebateStageProps) {
   return (
     <>
       <Debate
@@ -20,9 +20,7 @@ export default function DebateStage({ title, content, attemptId, resourceId, onC
         content={content}
         onComplete={onComplete}
       />
-      <HStack mt={4} justify="flex-end">
-        <Button variant="outline" onClick={onSkip}>Saltar</Button>
-      </HStack>
+     
     </>
   )
 }
