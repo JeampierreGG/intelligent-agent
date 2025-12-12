@@ -191,13 +191,7 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
         academicLevel: profileAcademicLevel || user.user_metadata?.academic_level
       }
 
-      console.log('🚀 Generando elementos seleccionados (aprendizaje y juego)...')
-      console.log('📋 Datos del formulario:', resourceData)
-      console.log('👤 Datos del usuario (perfil Supabase + metadata):', {
-        birthData: resourceData.userBirthData,
-        academicLevel: resourceData.academicLevel
-      })
-
+   
       // Generar en paralelo: elementos de aprendizaje seleccionados + elementos de juego seleccionados
       const studyPromises = selectedLearning.map((key) => {
         if (key === 'course_presentation') return generateCoursePresentation(resourceData)
@@ -219,7 +213,6 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
       })
       const gameResults = await Promise.all(gamePromises)
 
-      console.log('✅ Elementos generados (estudio y juego)')
 
       // Combinar en un único contenido manteniendo SOLO lo seleccionado
       const selectedElements = [...selectedGame, ...selectedLearning]
@@ -269,8 +262,8 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
       try {
         const c = savedCombined?.content as import('../../services/types').GeneratedResource | undefined
         const detail = { id: savedCombined?.id, content: c }
-        console.groupCollapsed('✅ Recurso guardado (contenido completo)')
-        console.log(detail)
+       
+       
         console.groupEnd()
       } catch (e) {
         console.warn('log recurso completo error:', e)

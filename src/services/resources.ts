@@ -108,7 +108,7 @@ export const saveEducationalResource = async (resourceData: CreateResourceData) 
       // Persistir detalles relacionados (matchups y elementos de estudio) en sus tablas específicas
       try {
         await persistGeneratedDetails(data, { persistStudy: true, persistGame: true })
-        console.log('✅ Detalles del recurso (matchups/estudio) persistidos correctamente')
+      
       } catch (relErr) {
         console.warn('⚠️ No se pudieron persistir detalles relacionados del recurso:', relErr)
       }

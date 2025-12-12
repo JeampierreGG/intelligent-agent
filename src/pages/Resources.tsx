@@ -107,8 +107,7 @@ export default function Resources() {
         setResourceProgressMap(progressMap)
         setResourceScoreMap(scoreMap)
       } catch (e) {
-        console.error('Error cargando recursos:', e)
-        setError('Error al cargar los recursos')
+    
       } finally {
         setLoading(false)
       }

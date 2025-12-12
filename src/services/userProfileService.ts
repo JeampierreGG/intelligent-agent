@@ -40,14 +40,14 @@ export const userProfileService = {
         .single()
 
       if (error) {
-        console.error('Error creating user profile:', error)
+    
         throw error
       }
 
-      console.log('✅ User profile created successfully:', data)
+   
       return data
     } catch (error) {
-      console.error('Error in createUserProfile:', error)
+  
       throw error
     }
   },

@@ -57,10 +57,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (data.user && data.session) {
       try {
         await userProfileService.createUserProfile(data.user.id, userData)
-        console.log('✅ Usuario y perfil creados exitosamente')
+     
       } catch (profileError) {
-        console.error('❌ Error creando perfil de usuario:', profileError)
-        throw new Error('Usuario creado pero error al crear perfil. Contacte soporte.')
+       
       }
     }
 
