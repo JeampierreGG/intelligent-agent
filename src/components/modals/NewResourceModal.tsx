@@ -21,8 +21,17 @@ import {
   CheckboxGroup,
   SimpleGrid
 } from '@chakra-ui/react'
-import { generateStudyOnlyResource, generateGameElementsOnly } from '../../services/openrouter'
 import type { ResourceFormData } from '../../services/types'
+import { generateCoursePresentation } from '../../generators/generateCoursePresentation'
+import { generateAccordionNotes } from '../../generators/generateAccordionNotes'
+import { generateTimeline } from '../../generators/generateTimeline'
+import { generateMnemonicCreator } from '../../generators/generateMnemonicCreator'
+import { generateQuiz } from '../../generators/generateQuiz'
+import { generateGroupSort } from '../../generators/generateGroupSort'
+import { generateAnagram } from '../../generators/generateAnagram'
+import { generateOpenTheBox } from '../../generators/generateOpenTheBox'
+import { generateFindTheMatch } from '../../generators/generateFindTheMatch'
+import { generateMatchUp } from '../../generators/generateMatchUp'
 import { saveEducationalResource, type CreateResourceData } from '../../services/resources'
 import { useAuth } from '../../contexts/useAuth'
 import { userProfileService } from '../../services/userProfileService'
@@ -119,6 +128,9 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
     }
   }, [isOpen, user?.id])
 
+  const stripDiacritics = (s: string) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const sanitizeStrict = (s: string) => stripDiacritics(s).replace(/[^A-Za-z ]/g, '')
+
   const handleSubmit = async () => {
     // Validar que el usuario esté autenticado
     if (!user) {
@@ -133,9 +145,8 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
     }
 
     // Validación: Materia/Curso y Tema son obligatorios
-    const sanitize = (s: string) => s.replace(/[<>"'`]/g, '').replace(/\s+/g, ' ').trim()
-    const subj = sanitize(formData.subject || '')
-    const topc = sanitize(formData.topic || '')
+    const subj = sanitizeStrict(formData.subject || '')
+    const topc = sanitizeStrict(formData.topic || '')
     if (!subj || !topc) {
       toast({
         title: 'Campos obligatorios faltantes',
@@ -188,18 +199,31 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
       })
 
       // Generar en paralelo: elementos de aprendizaje seleccionados + elementos de juego seleccionados
-      const [generatedStudy, gameBundle] = await Promise.all([
-        generateStudyOnlyResource(resourceData, selectedLearning),
-        generateGameElementsOnly(resourceData, selectedGame),
-      ])
+      const studyPromises = selectedLearning.map((key) => {
+        if (key === 'course_presentation') return generateCoursePresentation(resourceData)
+        if (key === 'accordion_notes') return generateAccordionNotes(resourceData)
+        if (key === 'timeline') return generateTimeline(resourceData)
+        if (key === 'mnemonic_creator') return generateMnemonicCreator(resourceData)
+        return Promise.resolve(null)
+      })
+      const studyResults = await Promise.all(studyPromises)
+
+      const gamePromises = selectedGame.map((key) => {
+        if (key === 'quiz') return generateQuiz(resourceData)
+        if (key === 'group_sort') return generateGroupSort(resourceData)
+        if (key === 'anagram') return generateAnagram(resourceData)
+        if (key === 'open_the_box') return generateOpenTheBox(resourceData)
+        if (key === 'find_the_match') return generateFindTheMatch(resourceData)
+        if (key === 'match_up') return generateMatchUp(resourceData)
+        return Promise.resolve(null)
+      })
+      const gameResults = await Promise.all(gamePromises)
 
       console.log('✅ Elementos generados (estudio y juego)')
 
       // Combinar en un único contenido manteniendo SOLO lo seleccionado
       const selectedElements = [...selectedGame, ...selectedLearning]
-      const filteredStudy = Array.isArray(generatedStudy.studyElements)
-        ? generatedStudy.studyElements.filter(el => selectedLearning.includes(el.type))
-        : []
+      const filteredStudy = studyResults.filter(Boolean) as Array<import('../../services/types').StudyElement>
       const dedupStudy: typeof filteredStudy = []
       const seenTypes = new Set<string>()
       for (const el of filteredStudy) {
@@ -208,20 +232,34 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
         seenTypes.add(t)
         dedupStudy.push(el)
       }
+      const matchUp = gameResults.find((r) => r && (r as import('../../services/types').MatchUpContent).templateType === 'match_up') as import('../../services/types').MatchUpContent | undefined
+      const quiz = gameResults.find((r) => r && (r as import('../../services/types').QuizContent).templateType === 'quiz') as import('../../services/types').QuizContent | undefined
+      const groupSort = gameResults.find((r) => r && (r as import('../../services/types').GroupSortContent).templateType === 'group_sort') as import('../../services/types').GroupSortContent | undefined
+      const anagram = gameResults.find((r) => r && (r as import('../../services/types').AnagramContent).templateType === 'anagram') as import('../../services/types').AnagramContent | undefined
+      const openTheBox = gameResults.find((r) => r && (r as import('../../services/types').OpenTheBoxContent).templateType === 'open_the_box') as import('../../services/types').OpenTheBoxContent | undefined
+      const findTheMatch = gameResults.find((r) => r && (r as import('../../services/types').FindTheMatchContent).templateType === 'find_the_match') as import('../../services/types').FindTheMatchContent | undefined
+
       const combinedContent: import('../../services/types').GeneratedResource = {
-        title: generatedStudy.title,
-        summary: generatedStudy.summary,
-        difficulty: generatedStudy.difficulty || 'Intermedio',
+        title: `${resourceData.subject}: ${resourceData.topic}`,
+        summary: `Elementos de aprendizaje sobre ${resourceData.topic} en ${resourceData.subject}`,
+        difficulty: resourceData.difficulty || 'Intermedio',
         studyElements: dedupStudy,
-        gameelement: { ...gameBundle },
+        gameelement: {
+          matchUp,
+          quiz,
+          groupSort,
+          anagram,
+          openTheBox,
+          findTheMatch,
+        },
       }
 
       const saveCombined: CreateResourceData = {
         user_id: user.id,
-        title: generatedStudy.title,
+        title: `${resourceData.subject}: ${resourceData.topic}`,
         subject: subj,
         topic: topc,
-        difficulty: formData.difficulty || generatedStudy.difficulty || 'Intermedio',
+        difficulty: formData.difficulty || 'Intermedio',
         content: combinedContent,
         selected_elements: selectedElements,
       }
@@ -283,7 +321,7 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
                 <Input
                   placeholder="Ej: Matemáticas, Historia, Programación, Biología..."
                   value={formData.subject}
-                  onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, subject: sanitizeStrict(e.target.value) })}
                   onBlur={(e) => setFormData({ ...formData, subject: normalizeFirstUpper(e.target.value) })}
                   size="lg"
                   isDisabled={isGenerating}
@@ -294,7 +332,7 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
                 <Input
                   placeholder="Ej: Ecuaciones cuadráticas, Segunda Guerra Mundial, Funciones en JavaScript..."
                   value={formData.topic}
-                  onChange={(e) => setFormData({ ...formData, topic: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, topic: sanitizeStrict(e.target.value) })}
                   onBlur={(e) => setFormData({ ...formData, topic: normalizeFirstUpper(e.target.value) })}
                   size="lg"
                   isDisabled={isGenerating}
@@ -314,6 +352,9 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
                 </Select>
               </FormControl>
             </HStack>
+            <Text fontSize="sm" color="gray.600">
+              No se permiten números ni caracteres especiales; las tildes se eliminan automáticamente.
+            </Text>
 
             <VStack align="stretch" spacing={4}>
               <FormLabel>Elementos de Aprendizaje</FormLabel>

@@ -1,9 +1,9 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Box, Flex, VStack, HStack, Text, Button, Card, CardBody, Icon, SimpleGrid, useColorModeValue, Badge, Spinner } from '@chakra-ui/react'
+import { Box, Flex, VStack, HStack, Text, Button, Card, CardBody, Icon, SimpleGrid, useColorModeValue, Spinner, useDisclosure } from '@chakra-ui/react'
 import AppHeader from '../components/layout/AppHeader'
 import AppSidebar from '../components/layout/AppSidebar'
 import { MdDashboard, MdLibraryBooks, MdLeaderboard } from 'react-icons/md'
-import { FiBookOpen, FiClock } from 'react-icons/fi'
+import { FiBookOpen, FiClock, FiPlus } from 'react-icons/fi'
 import { useAuth } from '../contexts/useAuth'
 import { useNavigate } from 'react-router-dom'
 import { getUserResourcesPaginated, type EducationalResource } from '../services/resources'
@@ -11,10 +11,13 @@ import { getResourceProgress } from '../services/resourceProgress'
 import { computeResourceProgressPct } from '../utils/progress'
 import type { ResourceProgressData } from '../services/resourceProgress'
 import { supabase } from '../services/supabase'
+import NewResourceModal from '../components/modals/NewResourceModal'
+import ResourceCard from '../components/resources/ResourceCard'
 
 export default function Resources() {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
+  const { isOpen, onOpen, onClose } = useDisclosure()
   
 
   const bgColor = useColorModeValue('#f7fafc', 'gray.900')
@@ -37,24 +40,8 @@ export default function Resources() {
   const [pageSize] = useState<number>(9)
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
-  const [startedMap, setStartedMap] = useState<Record<string, boolean>>({})
 
-  const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
-      case 'Básico': return 'green'
-      case 'Intermedio': return 'yellow'
-      case 'Avanzado': return 'red'
-      default: return 'gray'
-    }
-  }
-
-  const formatDate = (dateString: string) => {
-    try {
-      return new Date(dateString).toLocaleDateString('es-ES', { year: 'numeric', month: 'short', day: 'numeric' })
-    } catch {
-      return ''
-    }
-  }
+  
 
   const computeCardProgress = useCallback((resource: EducationalResource, prog: ResourceProgressData | null) => {
     return computeResourceProgressPct(resource, prog)
@@ -73,11 +60,9 @@ export default function Resources() {
         setTotalResourcesCount(count || 0)
         // progress and scores
         const progressMap: Record<string, number> = {}
-        const started: Record<string, boolean> = {}
         const scoreMap: Record<string, number> = {}
         for (const r of data || []) {
           const prog = getResourceProgress(user.id, r.id)
-          started[r.id] = !!(prog && prog.stage)
           try {
             const { data: rows } = await supabase
               .from('user_scores')
@@ -120,7 +105,6 @@ export default function Resources() {
           }
         }
         setResourceProgressMap(progressMap)
-        setStartedMap(started)
         setResourceScoreMap(scoreMap)
       } catch (e) {
         console.error('Error cargando recursos:', e)
@@ -131,6 +115,152 @@ export default function Resources() {
     }
     void load()
   }, [user?.id, currentPage, pageSize, computeCardProgress])
+
+  useEffect(() => {
+    if (!user?.id) return
+    let cleaning = false
+
+    const reloadResources = async () => {
+      if (!user?.id) return
+      try {
+        const { data, count, error } = await getUserResourcesPaginated(user.id, currentPage, pageSize)
+        if (error) throw error
+        if (!cleaning) {
+          setResources(data || [])
+          setTotalResourcesCount(count || 0)
+          const progressMap: Record<string, number> = {}
+          const scoreMap: Record<string, number> = {}
+          for (const r of data || []) {
+            const prog = getResourceProgress(user.id, r.id)
+            try {
+              const { data: rows } = await supabase
+                .from('user_scores')
+                .select('score, progress_pct')
+                .eq('user_id', user.id)
+                .eq('resource_id', r.id)
+                .order('progress_pct', { ascending: false })
+                .limit(1)
+              const bestRow = rows?.[0] as { score?: number | null; progress_pct?: number | null } | undefined
+              const bestProgress = (bestRow?.progress_pct ?? null)
+              const bestScore = (bestRow?.score ?? null)
+              if (bestProgress != null && !isNaN(bestProgress)) {
+                progressMap[r.id] = Math.round(bestProgress)
+              } else {
+                progressMap[r.id] = computeCardProgress(r, prog)
+              }
+              if (bestScore != null && !isNaN(bestScore)) {
+                scoreMap[r.id] = Math.round(bestScore)
+              } else {
+                const localPartial = localStorage.getItem(`partial_score_${user.id}_${r.id}`)
+                if (localPartial != null) {
+                  const parsed = Math.round(parseFloat(localPartial))
+                  scoreMap[r.id] = isNaN(parsed) ? 0 : parsed
+                } else {
+                  const ls = localStorage.getItem(`final_score_${user.id}_${r.id}`)
+                  scoreMap[r.id] = ls ? Math.round(parseFloat(ls)) : 0
+                }
+              }
+            } catch (err) {
+              console.warn('user_scores reload error:', err)
+              progressMap[r.id] = computeCardProgress(r, prog)
+              const localPartial = localStorage.getItem(`partial_score_${user.id}_${r.id}`)
+              if (localPartial != null) {
+                const parsed = Math.round(parseFloat(localPartial))
+                scoreMap[r.id] = isNaN(parsed) ? 0 : parsed
+              } else {
+                const ls = localStorage.getItem(`final_score_${user.id}_${r.id}`)
+                scoreMap[r.id] = ls ? Math.round(parseFloat(ls)) : 0
+              }
+            }
+          }
+          setResourceProgressMap(progressMap)
+          setResourceScoreMap(scoreMap)
+        }
+      } catch (err) {
+        console.warn('reloadResources (realtime) error:', err)
+      }
+    }
+
+    const channel = supabase
+      .channel(`resources-realtime-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'educational_resources', filter: `user_id=eq.${user.id}` },
+        () => { void reloadResources() }
+      )
+      .subscribe()
+
+    return () => {
+      cleaning = true
+      try { supabase.removeChannel(channel) } catch (err) { console.warn('removeChannel error:', err) }
+    }
+  }, [user?.id, currentPage, pageSize, computeCardProgress])
+
+  const handleModalClose = () => {
+    onClose()
+    if (!user?.id) return
+    const reload = async () => {
+      setLoading(true)
+      try {
+        const { data, count, error } = await getUserResourcesPaginated(user.id, currentPage, pageSize)
+        if (error) throw error
+        setResources(data || [])
+        setTotalResourcesCount(count || 0)
+        const progressMap: Record<string, number> = {}
+        const scoreMap: Record<string, number> = {}
+        for (const r of data || []) {
+          const prog = getResourceProgress(user.id, r.id)
+          try {
+            const { data: rows } = await supabase
+              .from('user_scores')
+              .select('score, progress_pct')
+              .eq('user_id', user.id)
+              .eq('resource_id', r.id)
+              .order('progress_pct', { ascending: false })
+              .limit(1)
+            const bestRow = rows?.[0] as { score?: number | null; progress_pct?: number | null } | undefined
+            const bestProgress = (bestRow?.progress_pct ?? null)
+            const bestScore = (bestRow?.score ?? null)
+            if (bestProgress != null && !isNaN(bestProgress)) {
+              progressMap[r.id] = Math.round(bestProgress)
+            } else {
+              progressMap[r.id] = computeCardProgress(r, prog)
+            }
+            if (bestScore != null && !isNaN(bestScore)) {
+              scoreMap[r.id] = Math.round(bestScore)
+            } else {
+              const localPartial = localStorage.getItem(`partial_score_${user.id}_${r.id}`)
+              if (localPartial != null) {
+                const parsed = Math.round(parseFloat(localPartial))
+                scoreMap[r.id] = isNaN(parsed) ? 0 : parsed
+              } else {
+                const ls = localStorage.getItem(`final_score_${user.id}_${r.id}`)
+                scoreMap[r.id] = ls ? Math.round(parseFloat(ls)) : 0
+              }
+            }
+          } catch (err) {
+            console.warn('user_scores reload (modal close) error:', err)
+            progressMap[r.id] = computeCardProgress(r, prog)
+            const localPartial = localStorage.getItem(`partial_score_${user.id}_${r.id}`)
+            if (localPartial != null) {
+              const parsed = Math.round(parseFloat(localPartial))
+              scoreMap[r.id] = isNaN(parsed) ? 0 : parsed
+            } else {
+              const ls = localStorage.getItem(`final_score_${user.id}_${r.id}`)
+              scoreMap[r.id] = ls ? Math.round(parseFloat(ls)) : 0
+            }
+          }
+        }
+        setResourceProgressMap(progressMap)
+        setResourceScoreMap(scoreMap)
+      } catch (err) {
+        console.warn('reload after modal close error:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    void reload()
+  }
 
   const handleSignOut = async () => {
     try { await signOut(); navigate('/login') } catch (err) { console.warn('signOut error:', err) }
@@ -151,9 +281,21 @@ export default function Resources() {
                 <Text fontSize="2xl" fontWeight="bold">Recursos</Text>
                 <Text color="gray.600">Todos tus recursos, con progreso y puntaje</Text>
               </VStack>
-              <HStack color="gray.600" spacing={2}>
-                <Icon as={FiClock} />
-                <Text fontSize="sm">Actualizado</Text>
+<Button
+  leftIcon={<Icon as={FiPlus} color="white" />}
+  bg="#000000"
+  color="white"
+  _hover={{ bg: "#000000" }}   // para que no cambie de color al pasar el mouse
+  onClick={onOpen}
+>
+  Nuevo Recurso
+</Button>
+
+              <HStack spacing={3} align="center">
+                <HStack color="gray.600" spacing={2}>
+                  <Icon as={FiClock} />
+                  <Text fontSize="sm">Actualizado</Text>
+                </HStack>
               </HStack>
             </HStack>
 
@@ -174,33 +316,14 @@ export default function Resources() {
               <>
                 <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
                   {resources.map((resource) => (
-                    <Card key={resource.id} bg={cardBg} shadow="sm" borderWidth="1px" borderColor={borderColor}>
-                      <CardBody>
-                        <VStack align="start" spacing={4}>
-                          <HStack justify="space-between" w="100%">
-                            <Badge colorScheme={getDifficultyColor(resource.difficulty)}>{resource.difficulty}</Badge>
-                            <Text fontSize="sm" color="gray.500">{formatDate(resource.created_at)}</Text>
-                          </HStack>
-                          <VStack align="start" spacing={2} w="100%">
-                            <Text fontWeight="bold" fontSize="lg" noOfLines={2} minH="48px">{resource.title}</Text>
-                            <HStack justify="space-between" w="100%">
-                              <Text fontSize="sm" color="gray.700">Progreso: {resourceProgressMap[resource.id] ?? 0}%</Text>
-                              <Text fontSize="sm" color="gray.700">Puntuación: {(resourceScoreMap[resource.id] ?? 0)}/200</Text>
-                            </HStack>
-                            
-                          </VStack>
-                          <VStack spacing={2} w="100%">
-                            <HStack spacing={2} w="100%">
-                              <Button size="sm" colorScheme="blue" flex={1} onClick={() => navigate(`/play/${resource.id}`)} isDisabled={!!startedMap[resource.id]}>Comenzar</Button>
-                              <Button size="sm" variant="outline" leftIcon={<Icon as={FiBookOpen} />} flex={1} onClick={() => navigate(`/review/${resource.id}`)}>Revisar</Button>
-                            </HStack>
-                            <HStack spacing={2} w="100%">
-                              <Button size="sm" variant="outline" flex={1} onClick={() => navigate(`/play/${resource.id}?new=1`)}>Reintentar</Button>
-                            </HStack>
-                          </VStack>
-                        </VStack>
-                      </CardBody>
-                    </Card>
+                    <ResourceCard
+                      key={resource.id}
+                      resource={resource}
+                      progress={resourceProgressMap[resource.id] ?? 0}
+                      score={resourceScoreMap[resource.id] ?? 0}
+                      disableStart={(resourceProgressMap[resource.id] ?? 0) > 0}
+                        disableRetake={(resourceProgressMap[resource.id] ?? 0) === 0}
+                    />
                   ))}
                 </SimpleGrid>
                 <HStack justify="space-between" align="center" mt={4}>
@@ -213,6 +336,7 @@ export default function Resources() {
           </VStack>
         </Box>
       </Flex>
+      <NewResourceModal isOpen={isOpen} onClose={handleModalClose} />
     </Box>
   )
 }

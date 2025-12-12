@@ -20,6 +20,8 @@ export default function Debate({ title, content, onComplete }: DebateProps) {
   const [level, setLevel] = useState<number>(0)
   const cardBg = useColorModeValue('white', 'gray.800')
 
+  const sanitizeLettersSpaces = (s: string) => (s || '').replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s]/g, '')
+
   useEffect(() => {
     let mounted = true
     setLoading(true)
@@ -73,7 +75,7 @@ export default function Debate({ title, content, onComplete }: DebateProps) {
               <Box flex={1} p={3} borderWidth="1px" borderRadius="md" bg="green.50" borderColor="green.200">
                 <Text fontSize="sm" fontWeight="semibold">A favor</Text>
                 <Text fontSize="sm" mb={2} whiteSpace="pre-wrap">{proOpinion}</Text>
-                <Textarea size="sm" placeholder="Escribe tu argumento a favor…" value={proInput} onChange={e => setProInput(e.target.value)} isDisabled={loading || !!conInput.trim()} />
+                <Textarea size="sm" placeholder="Escribe tu argumento a favor…" value={proInput} onChange={e => setProInput(sanitizeLettersSpaces(e.target.value))} isDisabled={loading || !!conInput.trim()} />
                 <HStack justify="end" mt={2}>
                     <Button size="sm" colorScheme="green" onClick={() => handleRespond('pro')} isDisabled={loading || !proInput.trim() || !!conInput.trim()} isLoading={loading}>Responder</Button>
                 </HStack>
@@ -81,7 +83,7 @@ export default function Debate({ title, content, onComplete }: DebateProps) {
               <Box flex={1} p={3} borderWidth="1px" borderRadius="md" bg="red.50" borderColor="red.200">
                 <Text fontSize="sm" fontWeight="semibold">En contra</Text>
                 <Text fontSize="sm" mb={2} whiteSpace="pre-wrap">{conOpinion}</Text>
-                <Textarea size="sm" placeholder="Escribe tu argumento en contra…" value={conInput} onChange={e => setConInput(e.target.value)} isDisabled={loading || !!proInput.trim()} />
+                <Textarea size="sm" placeholder="Escribe tu argumento en contra…" value={conInput} onChange={e => setConInput(sanitizeLettersSpaces(e.target.value))} isDisabled={loading || !!proInput.trim()} />
                 <HStack justify="end" mt={2}>
                     <Button size="sm" colorScheme="red" onClick={() => handleRespond('con')} isDisabled={loading || !conInput.trim() || !!proInput.trim()} isLoading={loading}>Responder</Button>
                 </HStack>

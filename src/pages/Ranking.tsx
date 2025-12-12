@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Box, Flex, VStack, HStack, Text, Card, CardBody, Icon, useColorModeValue, Badge, Spinner } from '@chakra-ui/react'
+import { Box, Flex, VStack, HStack, Text, Card, CardBody, Icon, useColorModeValue, Badge, Spinner, SimpleGrid } from '@chakra-ui/react'
 import AppHeader from '../components/layout/AppHeader'
 import AppSidebar from '../components/layout/AppSidebar'
 import { MdDashboard, MdLibraryBooks, MdLeaderboard } from 'react-icons/md'
@@ -83,11 +83,14 @@ export default function Ranking() {
         {/* Main content */}
         <Box flex={1} p={6} w="100%">
           <VStack spacing={6} align="stretch">
-            <Box>
-              <Text fontSize="2xl" fontWeight="bold">Ranking Global</Text>
-              <Text color="gray.600">Compite con otros estudiantes</Text>
+            <VStack spacing={3} align="center" textAlign="center">
+              <Box w="80px" h="80px" borderRadius="full" bgGradient="linear(to-br, teal.500, blue.500)" display="flex" alignItems="center" justifyContent="center">
+                <Icon as={FiAward} boxSize={10} color="white" />
+              </Box>
+              <Text fontSize="3xl" fontWeight="bold">Ranking Global</Text>
+              <Text color="gray.600">Compite con otros estudiantes y alcanza la cima</Text>
               <Text color="gray.500" fontSize="sm">El "Total" corresponde a la suma de todos tus intentos.</Text>
-            </Box>
+            </VStack>
 
             <Card bg={cardBg} shadow="sm" borderWidth="1px" borderColor={borderColor}>
               <CardBody>
@@ -105,7 +108,37 @@ export default function Ranking() {
                     <Text color="gray.500" textAlign="center">Completa recursos para sumar puntos y aparecer en el ranking</Text>
                   </VStack>
                 ) : (
-                  <VStack spacing={3} align="stretch">
+                  <VStack spacing={6} align="stretch">
+                    {ranking.length >= 3 && (
+                      <SimpleGrid columns={3} spacing={4} alignItems="end">
+                        {(() => {
+                          const podium = [ranking[1], ranking[0], ranking[2]]
+                          const styles = [
+                            { bg: 'linear-gradient(to-b, rgba(160,160,160,0.15), transparent)', border: '2px solid rgba(160,160,160,0.2)', iconColor: 'gray.400', scale: 1 },
+                            { bg: 'linear-gradient(to-b, rgba(218,165,32,0.15), transparent)', border: '2px solid rgba(218,165,32,0.2)', iconColor: 'yellow.500', scale: 1.08 },
+                            { bg: 'linear-gradient(to-b, rgba(205,127,50,0.15), transparent)', border: '2px solid rgba(205,127,50,0.2)', iconColor: 'orange.500', scale: 1 },
+                          ]
+                          return podium.map((p, i) => {
+                            const dn = displayNamesMap[p.user_id]
+                            const name = `${dn?.first_name || ''}${dn?.last_name ? ' ' + dn.last_name : ''}`.trim() || `Usuario ${p.user_id.slice(0,4)}…${p.user_id.slice(-4)}`
+                            const style = styles[i]
+                            return (
+                              <Card key={`podium-${i}`} bg={cardBg} style={{ transform: `scale(${style.scale})` }} borderRadius="xl" border={style.border}>
+                                <CardBody textAlign="center" pb={4} bgGradient={style.bg}>
+                                  <HStack justify="center" mb={2}>
+                                    <Icon as={FiAward} boxSize={i === 1 ? 14 : 12} color={style.iconColor} />
+                                  </HStack>
+                                  <Text fontSize={i === 1 ? 'xl' : 'lg'} fontWeight="semibold">{name}</Text>
+                                  <Text fontSize={i === 1 ? '3xl' : '2xl'} fontWeight="bold" mt={2}>{p.total_score}</Text>
+                                  <Text fontSize="sm" color="gray.500">puntos</Text>
+                                </CardBody>
+                              </Card>
+                            )
+                          })
+                        })()}
+                      </SimpleGrid>
+                    )}
+                    <VStack spacing={3} align="stretch">
                     {ranking.map((entry, idx) => {
                       const position = idx + 1
                       const isTop3 = position <= 3
@@ -127,7 +160,7 @@ export default function Ranking() {
                         return `Usuario ${uid.slice(0, 4)}…${uid.slice(-4)}`
                       })()
                       return (
-                        <HStack key={entry.user_id} spacing={4} p={3} borderRadius="md" bg={bg} borderWidth={isTop3 ? '1px' : '0'} borderColor={borderColor}>
+                        <HStack key={entry.user_id} spacing={4} p={4} borderRadius="lg" bg={bg} borderWidth={isTop3 ? '1px' : '0'} borderColor={borderColor} transition="all 0.2s" _hover={{ bg: isTop3 ? bg : 'gray.50' }}>
                           <HStack minW="80px" w="80px">
                             <Badge colorScheme="blue" fontSize="md">{position}°</Badge>
                             {isTop3 && <Icon as={FiAward} color={trophyColor} />}
@@ -142,6 +175,7 @@ export default function Ranking() {
                         </HStack>
                       )
                     })}
+                    </VStack>
                   </VStack>
                 )}
               </CardBody>

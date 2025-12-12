@@ -445,22 +445,7 @@ const [, setLoadingRecentCards] = useState<boolean>(false)
   }
 
 
-  const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
-      case 'Básico': return 'green'
-      case 'Intermedio': return 'yellow'
-      case 'Avanzado': return 'red'
-      default: return 'gray'
-    }
-  }
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-ES', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    })
-  }
+  
 
   // Eliminada función updateUserStats: ya no se utiliza
 
@@ -485,8 +470,6 @@ const [, setLoadingRecentCards] = useState<boolean>(false)
               onReview={(r) => handleReviewResource(r)}
               onRetake={(r) => handlePlayResource(r, { forceNewSession: true })}
               onViewAll={() => navigate('/recursos')}
-              getDifficultyColor={getDifficultyColor}
-              formatDate={formatDate}
             />
           </VStack>
         )

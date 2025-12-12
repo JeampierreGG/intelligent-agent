@@ -131,15 +131,17 @@ export default function ResourceSummary({ score, breakdown, openBoxResults, find
         </VStack>
       )}
 
-      <VStack align="stretch" spacing={2}>
-        <Text fontWeight="semibold">Unir parejas</Text>
-        {linesResults.map((r, idx) => (
-          <Box key={`sum-line-${idx}`} p={2} borderWidth="1px" borderRadius="md" borderColor={r.correct ? 'green.300' : 'red.300'} bg={r.correct ? 'green.50' : 'red.50'}>
-            <Text fontSize="sm"><strong>{r.term}</strong> → {r.chosen || 'Sin respuesta'}</Text>
-            {!r.correct && (<Text fontSize="xs" color="red.600">Correcta: {r.expected}</Text>)}
-          </Box>
-        ))}
-      </VStack>
+      {linesResults.length > 0 && (
+        <VStack align="stretch" spacing={2}>
+          <Text fontWeight="semibold">Unir parejas</Text>
+          {linesResults.map((r, idx) => (
+            <Box key={`sum-line-${idx}`} p={2} borderWidth="1px" borderRadius="md" borderColor={r.correct ? 'green.300' : 'red.300'} bg={r.correct ? 'green.50' : 'red.50'}>
+              <Text fontSize="sm"><strong>{r.term}</strong> → {r.chosen || 'Sin respuesta'}</Text>
+              {!r.correct && (<Text fontSize="xs" color="red.600">Correcta: {r.expected}</Text>)}
+            </Box>
+          ))}
+        </VStack>
+      )}
 
       {anagramResults.length > 0 && (
         <VStack align="stretch" spacing={2}>

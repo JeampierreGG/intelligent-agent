@@ -9,7 +9,7 @@ import { getResourceById, type EducationalResource } from '../services/resources
 import { getResourceProgress, saveResourceProgress, clearResourceProgress } from '../services/resourceProgress'
 import { computeResourceProgressPct } from '../utils/progress'
 import { computeWeightedFinalScoreFromState } from '../utils/scoring'
-import { startNewAttempt, completeAttempt, saveAttemptFinalScore, getAttemptCount } from '../services/attempts'
+import { startNewAttempt, completeAttempt, saveAttemptFinalScore, getAttemptCount, saveAttemptSnapshot } from '../services/attempts'
  
 import { persistMnemonic } from '../services/mnemonics.ts'
 import type { MatchUpContent, StudyElement, QuizContent, GroupSortContent, AnagramContent, OpenTheBoxContent, FindTheMatchContent, DebateContent, GeneratedResource } from '../services/types'
@@ -118,28 +118,50 @@ export default function PlayResource() {
   const confirmExit = useCallback(async () => {
     setExiting(true)
     try {
-      if (currentAttemptId) {
+      // Asegurar que exista un intento para poder guardar
+      let attemptId = currentAttemptId
+      if (!attemptId && user?.id && resource?.id) {
+        try {
+          const attempt = await startNewAttempt(resource.id, user.id)
+          attemptId = attempt?.id ?? null
+          setCurrentAttemptId(attemptId)
+          // Guardar snapshot de contenido actual vinculado al intento
+          try {
+            const content = resource.content as GeneratedResource
+            const snapshot: { gameelement?: GeneratedResource['gameelement']; studyElements?: StudyElement[] } = {
+              gameelement: (content as GeneratedResource)?.gameelement,
+              studyElements: (content as GeneratedResource)?.studyElements,
+            }
+            if (attemptId) { await saveAttemptSnapshot(attemptId, snapshot) }
+          } catch (err) { console.warn('saveAttemptSnapshot on exit error:', err) }
+        } catch (err) {
+          console.warn('startNewAttempt on exit error:', err)
+        }
+      }
+
+      if (attemptId) {
         const res = computeWeightedFinalScore()
         const rounded = Math.round(res.score)
         const prog = (user?.id && playingResourceId) ? getResourceProgress(user.id, playingResourceId) : null
         const attemptPctRaw = resource ? computeResourceProgressPct(resource, prog) : null
         const attemptPct = (attemptPctRaw == null ? undefined : attemptPctRaw)
-          const summarySnapshot = {
-            score: rounded,
-            breakdown: res.breakdown,
-            quizResults,
-            linesResults,
-            groupSortResults,
-            openBoxResults,
-            anagramResults,
-            findMatchResults,
-            mnemonicPracticeResults,
-            attempt_progress_pct: attemptPct,
-            difficulty: resource?.difficulty,
-            debate_level: prog?.debateLevel ?? 0
-          }
-        try { await saveAttemptFinalScore(currentAttemptId, rounded, res.breakdown, summarySnapshot) } catch (err) { console.warn('saveAttemptFinalScore exit error:', err) }
-        try { await completeAttempt(currentAttemptId) } catch (err) { console.warn('completeAttempt exit error:', err) }
+        const summarySnapshot = {
+          score: rounded,
+          breakdown: res.breakdown,
+          quizResults,
+          linesResults,
+          groupSortResults,
+          openBoxResults,
+          anagramResults,
+          findMatchResults,
+          mnemonicPracticeResults,
+          attempt_progress_pct: attemptPct,
+          difficulty: resource?.difficulty,
+          debate_level: prog?.debateLevel ?? 0
+        }
+        try { await saveAttemptFinalScore(attemptId, rounded, res.breakdown, summarySnapshot) } catch (err) { console.warn('saveAttemptFinalScore exit error:', err) }
+        try { await completeAttempt(attemptId) } catch (err) { console.warn('completeAttempt exit error:', err) }
+        try { if (user?.id && playingResourceId) { localStorage.setItem(`final_score_${user.id}_${playingResourceId}`, String(rounded)) } } catch (err) { console.warn('local final_score persist error:', err) }
       }
     } finally {
       setExiting(false)
@@ -331,7 +353,18 @@ export default function PlayResource() {
           }
         }
 
-        const initialStage: 'study' | 'lines' = (content?.studyElements?.length || 0) > 0 ? 'study' : 'lines'
+        const initialStage = (() => {
+          if ((content?.studyElements?.length || 0) > 0) return 'study'
+          const order: Array<'quiz' | 'lines' | 'group_sort' | 'find_the_match' | 'open_box' | 'anagram' | 'debate'> = []
+          if (quiz) order.push('quiz')
+          if (matchUp) order.push('lines')
+          if (groupSort) order.push('group_sort')
+          if (findTheMatch) order.push('find_the_match')
+          if (openTheBox) order.push('open_box')
+          if (anagram) order.push('anagram')
+          if (playingDebate) order.push('debate')
+          return (order[0] ?? 'summary')
+        })()
         setMatchUpStage(initialStage)
       } catch {
         navigate('/recursos')
@@ -351,7 +384,7 @@ export default function PlayResource() {
         ]} />
 
         <Box flex={1} p={6} w="100%">
-          {playingMatchUp && (
+          {matchUpStage && (
             <Suspense fallback={
               <VStack spacing={4} py={8} align="stretch">
                 <VStack spacing={2} align="stretch">

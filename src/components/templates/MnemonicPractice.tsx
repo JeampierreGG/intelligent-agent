@@ -27,6 +27,8 @@ export default function MnemonicPractice({ content, mnemonicText, onComplete, re
   const [results, setResults] = useState<Array<{ prompt: string; answer: string; userAnswer: string; correct: boolean }>>([])
   const [score, setScore] = useState<number>(0)
 
+  const sanitizeMnemonic = (s: string) => (s || '').replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s]/g, '')
+
   // Normaliza texto para comparación flexible: ignora mayúsculas/minúsculas y tildes
   const normalizeText = (s: string) => {
     return (s || '')
@@ -73,7 +75,7 @@ export default function MnemonicPractice({ content, mnemonicText, onComplete, re
                   <Text fontSize="sm" fontWeight="semibold">{idx + 1}. Definición: {it.answer}</Text>
                   <Input placeholder="Escribe la respuesta correcta" value={answers[idx]} onChange={(e) => {
                     const next = [...answers]
-                    next[idx] = e.target.value
+                    next[idx] = sanitizeMnemonic(e.target.value)
                     setAnswers(next)
                   }} />
                 </VStack>

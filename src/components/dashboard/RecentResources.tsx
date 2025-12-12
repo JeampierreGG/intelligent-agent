@@ -1,25 +1,23 @@
 import React from 'react'
-import { VStack, HStack, Text, Button, Card, CardBody, SimpleGrid, Icon, Badge, Spinner, useColorModeValue } from '@chakra-ui/react'
+import { VStack, HStack, Text, Button, Card, CardBody, SimpleGrid, Icon, Spinner, useColorModeValue } from '@chakra-ui/react'
 import { FiBookOpen } from 'react-icons/fi'
 import type { EducationalResource } from '../../services/resources'
+import ResourceCard from '../resources/ResourceCard'
 
 interface RecentResourcesProps {
   resources: EducationalResource[]
   loadingResources: boolean
   resourceProgressMap: Record<string, number>
   resourceScoreMap: Record<string, number>
-  resourceElementScoresMap?: Record<string, Array<{ element_type: string; element_name: string; points_scored: number }>>
   startedResourceIds: Set<string>
   hasAttemptMap: Record<string, boolean>
   onStart: (resource: EducationalResource, opts?: { forceNewSession?: boolean }) => void
   onReview: (resource: EducationalResource) => void
   onRetake: (resource: EducationalResource) => void
   onViewAll: () => void
-  getDifficultyColor: (d: string) => string
-  formatDate: (iso: string) => string
 }
 
-const RecentResources: React.FC<RecentResourcesProps> = ({ resources, loadingResources, resourceProgressMap, resourceScoreMap, resourceElementScoresMap = {}, startedResourceIds, onStart, onReview, onRetake, onViewAll, getDifficultyColor, formatDate }) => {
+const RecentResources: React.FC<RecentResourcesProps> = ({ resources, loadingResources, resourceProgressMap, resourceScoreMap, onStart, onReview, onRetake, onViewAll }) => {
   const cardBg = useColorModeValue('white', 'gray.800')
   const borderColor = useColorModeValue('gray.200', 'gray.700')
   return (
@@ -51,50 +49,40 @@ const RecentResources: React.FC<RecentResourcesProps> = ({ resources, loadingRes
             </CardBody>
           </Card>
         )
-      ) : (
-        <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
-          {resources.slice(0, 6).map((resource) => (
-            <Card key={resource.id} bg={cardBg} shadow="sm" borderWidth="1px" borderColor={borderColor}>
+      ) : (() => {
+        const sorted = [...resources].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        const top6 = sorted.slice(0, 6)
+        const ready = top6.every(r => resourceScoreMap[r.id] != null && resourceProgressMap[r.id] != null)
+        if (!ready) {
+          return (
+            <Card bg={cardBg} shadow="sm" borderWidth="1px" borderColor={borderColor}>
               <CardBody>
-                <VStack align="start" spacing={4}>
-                  <HStack justify="space-between" w="100%">
-                    <Badge colorScheme={getDifficultyColor(resource.difficulty)}>{resource.difficulty}</Badge>
-                    <Text fontSize="sm" color="gray.500">{formatDate(resource.created_at)}</Text>
-                  </HStack>
-                  <VStack align="start" spacing={2} w="100%">
-                    <Text fontWeight="bold" fontSize="lg" noOfLines={2} minH="48px">{resource.title}</Text>
-                    <HStack justify="space-between" w="100%">
-                      <Text fontSize="sm" color="gray.700">Progreso: {resourceProgressMap[resource.id] ?? 0}%</Text>
-                      <Text fontSize="sm" color="gray.700">Puntuación: {(resourceScoreMap[resource.id] ?? 0)}/200</Text>
-                    </HStack>
-                    {Array.isArray(resourceElementScoresMap[resource.id]) && (resourceElementScoresMap[resource.id] || []).length > 0 && (
-                      <VStack align="stretch" spacing={1} w="100%">
-                        <Text fontSize="sm" color="gray.600">Desglose último intento</Text>
-                        {(resourceElementScoresMap[resource.id] || []).slice(0, 4).map((row, idx) => (
-                          <HStack key={`elms-${resource.id}-${idx}`} justify="space-between" w="100%">
-                            <Text fontSize="xs" color="gray.700">{row.element_name}</Text>
-                            <Text fontSize="xs" color="gray.700">{Number(row.points_scored).toFixed(2)} / 20</Text>
-                          </HStack>
-                        ))}
-                      </VStack>
-                    )}
-                    
-                  </VStack>
-                  <VStack spacing={2} w="100%">
-                    <HStack spacing={2} w="100%">
-                      <Button size="sm" colorScheme="blue" flex={1} onClick={() => onStart(resource)} isDisabled={startedResourceIds.has(resource.id)}>Comenzar</Button>
-                      <Button size="sm" variant="outline" leftIcon={<Icon as={FiBookOpen} />} flex={1} onClick={() => onReview(resource)}>Revisar</Button>
-                    </HStack>
-                    <HStack spacing={2} w="100%">
-                      <Button size="sm" variant="outline" flex={1} onClick={() => onRetake(resource)}>Reintentar</Button>
-                    </HStack>
-                  </VStack>
-                </VStack>
+                <HStack justify="center" py={8}>
+                  <Spinner />
+                  <Text color="gray.600">Cargando tus últimos recursos…</Text>
+                </HStack>
               </CardBody>
             </Card>
-          ))}
-        </SimpleGrid>
-      )}
+          )
+        }
+        return (
+          <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
+            {top6.map((resource) => (
+              <ResourceCard
+                key={resource.id}
+                resource={resource}
+                progress={resourceProgressMap[resource.id] ?? 0}
+                score={resourceScoreMap[resource.id] ?? 0}
+                disableStart={(resourceProgressMap[resource.id] ?? 0) > 0}
+                disableRetake={(resourceProgressMap[resource.id] ?? 0) === 0} 
+                onStart={(r) => onStart(r)}
+                onReview={(r) => onReview(r)}
+                onRetake={(r) => onRetake(r)}
+              />
+            ))}
+          </SimpleGrid>
+        )
+      })()}
     </VStack>
   )
 }

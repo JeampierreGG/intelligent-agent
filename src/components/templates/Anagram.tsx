@@ -12,6 +12,12 @@ function normalize(s: string) {
   return (s || '').toLowerCase().trim()
 }
 
+const sanitizeAnagram = (s: string) => (s || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toUpperCase()
+  .replace(/[^A-Z]/g, '')
+
 const Anagram: React.FC<AnagramProps> = ({ content, onComplete, renderContinueButton }) => {
   const items = useMemo(() => content.items || [], [content.items])
   const [inputs, setInputs] = useState<string[]>(items.map(() => ''))
@@ -71,7 +77,7 @@ const Anagram: React.FC<AnagramProps> = ({ content, onComplete, renderContinueBu
                   <Input
                     placeholder="Escribe la palabra correcta"
                     value={inputs[idx]}
-                    onChange={(e) => setInputs(prev => prev.map((v, i) => (i === idx ? e.target.value : v)))}
+                    onChange={(e) => setInputs(prev => prev.map((v, i) => (i === idx ? sanitizeAnagram(e.target.value) : v)))}
                   />
                   <Button onClick={() => checkItem(idx)} colorScheme="blue">Verificar</Button>
                 </HStack>

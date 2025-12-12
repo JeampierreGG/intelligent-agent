@@ -24,9 +24,10 @@ export default function Nemotecnia({ content, onDraftChange, onCompleted }: Nemo
   const cardBg = useColorModeValue('white', 'gray.800')
   const borderColor = useColorModeValue('gray.200', 'gray.700')
 
+  const sanitizeMnemonic = (s: string) => (s || '').replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s]/g, '')
 
   const handleDraftChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const val = e.target.value
+    const val = sanitizeMnemonic(e.target.value)
     setDraft(val)
     onDraftChange?.(val)
     // Si el alumno escribe algo, considerar la actividad como completada

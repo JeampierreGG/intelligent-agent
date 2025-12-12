@@ -135,7 +135,7 @@ export default function ProfileModal({ isOpen, onClose, userId, userEmail, first
         </ModalBody>
         <ModalFooter>
           <Button mr={3} onClick={handleCancel} variant="ghost">Cancelar</Button>
-          <Button colorScheme="teal" onClick={handleSave} isLoading={loading}>Guardar cambios</Button>
+          <Button bg="#000000" color="white" onClick={handleSave} isLoading={loading} _hover={{ bg: '#000000' }} _active={{ bg: '#000000' }} transition="none">Guardar cambios</Button>
         </ModalFooter>
       </ModalContent>
     </Modal>
