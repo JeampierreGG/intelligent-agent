@@ -261,10 +261,7 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
 
       try {
         const c = savedCombined?.content as import('../../services/types').GeneratedResource | undefined
-        const detail = { id: savedCombined?.id, content: c }
-       
-       
-        console.groupEnd()
+        void c
       } catch (e) {
         console.warn('log recurso completo error:', e)
       }
