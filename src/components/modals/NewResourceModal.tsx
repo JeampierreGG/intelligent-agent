@@ -259,12 +259,9 @@ const NewResourceModal: React.FC<NewResourceModalProps> = ({
       const { data: savedCombined, error: saveErrCombined } = await saveEducationalResource(saveCombined)
       if (saveErrCombined) throw saveErrCombined
 
-      try {
-        const c = savedCombined?.content as import('../../services/types').GeneratedResource | undefined
-        void c
-      } catch (e) {
-        console.warn('log recurso completo error:', e)
-      }
+      console.time("⏱️ Tiempo Total de Generación")
+      console.timeEnd("⏱️ Tiempo Total de Generación") // Fin medición de tiempo
+      console.groupEnd()
 
       toast({ title: 'Recurso creado', description: 'Se generaron todos los elementos seleccionados.', status: 'success', duration: 4000, isClosable: true })
 
