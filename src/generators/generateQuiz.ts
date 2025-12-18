@@ -3,9 +3,10 @@ import { callOpenRouter } from './utils/openrouter'
 import { safeParseJson } from './utils/json'
 
 export async function generateQuiz(formData: ResourceFormData): Promise<QuizContent | null> {
-  const subject = formData.subject || 'General'
-  const topic = formData.topic || 'Libre'
-  const difficulty = formData.difficulty || 'Intermedio'
+  const subject = formData.subject 
+  const topic = formData.topic
+  const difficulty = formData.difficulty 
+  const level = formData.academicLevel  
   const struct = `{
   "quiz": { "templateType": "quiz", "title": "...", "questions": [ { "prompt": "...", "options": ["A","B","C","D"], "correctIndex": 0, "explanation": "..." } ] }
 }`
@@ -13,7 +14,7 @@ export async function generateQuiz(formData: ResourceFormData): Promise<QuizCont
 ${struct}
 Reglas:
 - EXACTAMENTE 5 preguntas, cada una con 4 opciones y explicación breve.
-- Ajusta la dificultad: ${difficulty}.
+- Ajusta al nivel: ${level} y dificultad: ${difficulty}.
 - Prohibido mencionar JSON, RFC8259, formato, JavaScript, comillas, arrays, claves, sintaxis.`
   const raw = await callOpenRouter(prompt, 0.5, 3)
   const parsed = safeParseJson(raw) as unknown

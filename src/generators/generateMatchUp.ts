@@ -16,9 +16,10 @@ const sanitizePairs = (pairs: Array<{ left: string; right: string }>): Array<{ l
 }
 
 export async function generateMatchUp(formData: ResourceFormData): Promise<MatchUpContent | null> {
-  const subject = formData.subject || 'General'
-  const topic = formData.topic || 'Libre'
-  const difficulty = formData.difficulty || 'Intermedio'
+  const subject = formData.subject 
+  const topic = formData.topic 
+  const difficulty = formData.difficulty 
+  const level = formData.academicLevel 
   const struct = `{
   "matchUp": { "templateType": "match_up", "title": "...", "linesMode": { "pairs": [ { "left": "concepto", "right": "definición breve" } ] } }
 }`
@@ -28,7 +29,7 @@ Reglas:
 - EXACTAMENTE 5 pares concepto-definición en modo líneas.
 - Evita que la definición repita literal el término.
 - Prohibido mencionar JSON, RFC8259, formato, JavaScript, comillas, arrays, claves, sintaxis.
-- Ajusta la dificultad: ${difficulty}.`
+- Ajusta al nivel: ${level} y dificultad: ${difficulty}.`
 
   for (let attempt = 0; attempt < 4; attempt++) {
     const raw = await callOpenRouter(basePrompt, 0.5, 3)

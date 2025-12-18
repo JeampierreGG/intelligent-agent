@@ -3,9 +3,10 @@ import { callOpenRouter } from './utils/openrouter'
 import { safeParseJson } from './utils/json'
 
 export async function generateAnagram(formData: ResourceFormData): Promise<AnagramContent | null> {
-  const subject = formData.subject || 'General'
-  const topic = formData.topic || 'Libre'
-  const difficulty = formData.difficulty || 'Intermedio'
+  const subject = formData.subject
+  const topic = formData.topic 
+  const difficulty = formData.difficulty 
+  const level = formData.academicLevel 
   const struct = `{
   "anagram": { "templateType": "anagram", "title": "...", "items": [ { "clue": "pista", "answer": "término", "scrambled": "letras" } ] }
 }`
@@ -13,7 +14,7 @@ export async function generateAnagram(formData: ResourceFormData): Promise<Anagr
 ${struct}
 Reglas:
 - EXACTAMENTE 5 ítems.
-- Ajusta la dificultad: ${difficulty}.
+- Ajusta al nivel: ${level} y dificultad: ${difficulty}.
 - Prohibido mencionar JSON, RFC8259, formato, JavaScript, comillas, arrays, claves, sintaxis.`
   const raw = await callOpenRouter(prompt, 0.5, 3)
   const parsed = safeParseJson(raw) as unknown

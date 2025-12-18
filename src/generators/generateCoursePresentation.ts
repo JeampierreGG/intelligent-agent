@@ -3,10 +3,10 @@ import { callOpenRouter } from './utils/openrouter'
 import { safeParseJson } from './utils/json'
 
 export async function generateCoursePresentation(formData: ResourceFormData): Promise<StudyElement | null> {
-  const subject = formData.subject || 'General'
-  const topic = formData.topic || 'Libre'
-  const level = formData.academicLevel || 'Nivel general'
-  const difficulty = formData.difficulty || 'Intermedio'
+  const subject = formData.subject 
+  const topic = formData.topic 
+  const level = formData.academicLevel 
+  const difficulty = formData.difficulty 
   const struct = `{
   "course_presentation": { "slides": [ { "title": "...", "text": "5 líneas sin URLs, relacionadas a ${topic}" } ] }
 }`

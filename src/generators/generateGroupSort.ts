@@ -19,9 +19,10 @@ const normalizeTwoGroups = (gs: GroupSortContent): GroupSortContent => {
 }
 
 export async function generateGroupSort(formData: ResourceFormData): Promise<GroupSortContent | null> {
-  const subject = formData.subject || 'General'
-  const topic = formData.topic || 'Libre'
-  const difficulty = formData.difficulty || 'Intermedio'
+  const subject = formData.subject 
+  const topic = formData.topic 
+  const difficulty = formData.difficulty 
+  const level = formData.academicLevel 
   const struct = `{
   "groupSort": { "templateType": "group_sort", "title": "...", "groups": [ { "name": "Categoría 1 relacionada a ${topic}", "items": ["x","y"] }, { "name": "Categoría 2 relacionada a ${topic}", "items": ["z"] } ] }
 }`
@@ -31,7 +32,7 @@ Reglas:
 - 2 grupos y hasta 6 ítems en total.
 - Los NOMBRES de los grupos deben ser DESCRIPTIVOS y relacionados con el tema (evita "A", "B", "Grupo 1", "Grupo 2").
 - Ejemplos de buen nombre (adaptar al tema): "Números naturales", "Números enteros"; "Estructuras lineales", "Estructuras no lineales".
-- Ajusta la dificultad: ${difficulty}.
+- Ajusta al nivel: ${level} y dificultad: ${difficulty}.
 - Prohibido mencionar JSON, RFC8259, formato, JavaScript, comillas, arrays, claves, sintaxis.`
   const raw = await callOpenRouter(prompt, 0.5, 3)
   const parsed = safeParseJson(raw) as unknown

@@ -22,9 +22,10 @@ const uniqueFive = (ftm: FindTheMatchContent): FindTheMatchContent => {
 }
 
 export async function generateFindTheMatch(formData: ResourceFormData): Promise<FindTheMatchContent | null> {
-  const subject = formData.subject || 'General'
-  const topic = formData.topic || 'Libre'
-  const difficulty = formData.difficulty || 'Intermedio'
+  const subject = formData.subject 
+  const topic = formData.topic
+  const difficulty = formData.difficulty
+  const level = formData.academicLevel 
   const struct = `{
   "findTheMatch": { "templateType": "find_the_match", "title": "...", "pairs": [ { "concept": "...", "affirmation": "..." } ] }
 }`
@@ -32,7 +33,7 @@ export async function generateFindTheMatch(formData: ResourceFormData): Promise<
 ${struct}
 Reglas:
 - EXACTAMENTE 5 pares únicos concepto-afirmación.
-- Ajusta la dificultad: ${difficulty}.
+- Ajusta al nivel: ${level} y dificultad: ${difficulty}.
 - Prohibido mencionar JSON, RFC8259, formato, JavaScript, comillas, arrays, claves, sintaxis.`
   const raw = await callOpenRouter(prompt, 0.5, 3)
   const parsed = safeParseJson(raw) as unknown

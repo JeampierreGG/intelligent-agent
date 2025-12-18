@@ -24,23 +24,31 @@ export const safeParseJson = (raw: string): unknown => {
   let s = (raw || '').trim()
   s = s.replace(/^```[a-zA-Z]*\s*/,'').replace(/```$/,'')
   const block = findJsonBlock(s) ?? s
+
   const tryParse = (t: string) => JSON.parse(t)
+
   try {
     return tryParse(block)
-  } catch {
-    const t1 = block
-      .replace(/,\s*(\]|\})/g, '$1')
-      .replace(/[“”]/g, '"')
-      .replace(/[‘’]/g, "'")
+  } catch (e1) {
     try {
+      const t1 = block
+        .replace(/,\s*(\]|\})/g, '$1') // comas finales
+        .replace(/[“”]/g, '"')
+        .replace(/[‘’]/g, "'")
       return tryParse(t1)
-    } catch {
-      const t2 = t1
-        .replace(/\\"/g, '"')
-        .replace(/\\\//g, '/')
-        .replace(/\\n/g, ' ')
-        .replace(/\\t/g, ' ')
-      return tryParse(t2)
+    } catch (e2) {
+      try {
+        const t2 = block
+          .replace(/\\"/g, '"')
+          .replace(/\\\//g, '/')
+          .replace(/\\n/g, ' ')
+          .replace(/\\t/g, ' ')
+        return tryParse(t2)
+      } catch (e3) {
+        console.error('❌ JSON inválido tras 3 intentos:', raw)
+        return null
+      }
     }
   }
 }
+
